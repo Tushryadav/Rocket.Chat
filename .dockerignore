@@ -1,32 +1,18 @@
-# Only exclude heavy/unnecessary directories
-node_modules
+# Ignore secrets
+*.pem
+*.key
+*.crt
 
-# Exclude downloaded cache (will be re-fetched inside container)
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
-
-# IMPORTANT: Do NOT ignore these — Yarn Berry needs them:
-# .yarn/releases  (the Yarn binary)
-# .yarn/patches   (package patches)
-# .yarnrc.yml     (Yarn config)
-# package.json    (obviously needed)
-# yarn.lock       (dependency lock file)
-
-# Git history
-.git
-
-# Logs
-*.log
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Environment files
+# Ignore env files
 .env
 .env.*
 
-# Docker files
+# Ignore git
+.git
+.gitignore
+
+# Ignore node_modules (if rebuilding inside container)
+node_modules
+
+# Ignore docker-compose and local configs
 docker-compose.yml
-nginx/
