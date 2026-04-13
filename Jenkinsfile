@@ -47,9 +47,9 @@ pipeline {
                 script {
                     withCredentials([
                         usernamePassword(
-                            credentialsId: ACR_CREDENTIALS
+                            credentialsId: ACR_CREDENTIALS,
                             usernameVariable: 'ACR_USER',
-                            passwordVariable: 'ACR_PASS',
+                            passwordVariable: 'ACR_PASS'
                         )
                     ]) {
                         sh "echo \$ACR_PASS | docker login ${ACR_LOGIN_SERVER} --username \$ACR_USER --password-stdin"
