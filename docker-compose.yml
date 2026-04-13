@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: rocketchat_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+    # Starts MongoDB with replica set AND auto-initializes it in one command
+    entrypoint: >
+      bash -c "
+        mongod --replSet rs0 --bind_ip_all &
+        sleep 10 &&
+        mongosh --eval \"
+          try {
+            var status = rs.status();
+            if (status.myState !== 1) {
+              throw new Error('Not primary yet');
+            }
+            var cfg = rs.conf();
+            if (cfg.members[0].host !== 'mongodb:27017') {
+              cfg.members[0].host = 'mongodb:27017';
+              rs.reconfig(cfg, { force: true });
+              print('Replica set reconfigured to mongodb:27017');
+            } else {
+              print('Replica set already correctly configured');
+            }
+          } catch(e) {
+            rs.initiate({
+              _id: 'rs0',
+              members: [{ _id: 0, host: 'mongodb:27017' }]
+            });
+            print('Replica set initialized with host mongodb:27017');
+          }
+        \" &&
+        wait
+      "
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rocketchat:
+    image: test-rc:latest   # create a image using Dockerfile 
+    container_name: rocketchat_app
+    restart: unless-stopped
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    environment:
+      - ROOT_URL=http://localhost:3000
+      - PORT=3000
+      - MONGO_URL=mongodb://mongodb:27017/rocketchat?replicaSet=rs0&authSource=admin
+      - MONGO_OPLOG_URL=mongodb://mongodb:27017/local?replicaSet=rs0
+      - DEPLOY_METHOD=docker
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - rocketchat_uploads:/app/uploads
+
+  nginx:
+    image: nginx:latest
+    container_name: rocketchat_nginx
+    restart: unless-stopped
+    ports:
+      - "8080:8080"       # HTTP
+      - "8443:8443"     # HTTPS (for when you add SSL later)
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro        # Nginx config 
+    depends_on:
+      - rocketchat
+
+volumes:
+  mongo_data:
+    driver: local
+  rocketchat_uploads:
+    driver: local
