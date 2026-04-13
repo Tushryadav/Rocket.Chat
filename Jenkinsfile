@@ -62,18 +62,20 @@ pipeline {
         stage('Build Image') {
             steps {
                 script {
-                    def buildArgs = [
-                        "--tag ${FULL_IMAGE}",
-                        "--tag ${LATEST_IMAGE}",
-                        "--label build-number=${BUILD_NUMBER}",
-                        "--label git-commit="${GIT_COMMIT.take(7)}",
-                        "--label git-branch=${GIT_BRANCH}",
-                        "--label build-date=\$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-                        "."
-                    ].join(' ')
+                    def shortCommit = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : "unknown"
 
-                    sh "docker build ${buildArgs}"
-                    echo "✅ Built: ${FULL_IMAGE}"
+                    sh """
+                    docker build \
+                      -t ${FULL_IMAGE} \
+                      -t ${LATEST_IMAGE} \
+                      --label build-number=${BUILD_NUMBER} \
+                      --label git-commit=${shortCommit} \
+                      --label git-branch=${GIT_BRANCH} \
+                      --label build-date=\$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+                      .
+                    """
+                    
+                    echo "✅ Image Built: ${FULL_IMAGE}"
                 }
             }
         }
