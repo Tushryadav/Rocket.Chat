@@ -80,6 +80,21 @@ pipeline {
             }
         }
 
+        stage('Scan Image with Trivy') {
+            steps {
+                script {
+                    echo "🔍 Scanning Docker image with Trivy..."
+        
+                    sh """
+                    # Run scan (FAIL if HIGH or CRITICAL vulnerabilities found)
+                    trivy image --exit-code 1 --severity HIGH,CRITICAL ${FULL_IMAGE}
+                    """
+        
+                    echo "✅ Trivy scan passed (no HIGH/CRITICAL vulnerabilities)"
+                }
+            }
+        }
+
         stage('Push to ACR') {
             steps {
                 script {
