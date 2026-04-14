@@ -18,6 +18,12 @@ pipeline {
         timestamps()
     }
 
+    stage('Clean Workspace') {
+        steps {
+            cleanWs()
+        }
+    }
+
     stages {
 
         stage('Checkout') {
@@ -56,6 +62,15 @@ pipeline {
                         echo "Logged into ${ACR_LOGIN_SERVER}"
                     }
                 }
+            }
+        }
+
+        stage('Debug Workspace') {
+            steps {
+                sh 'pwd'
+                sh 'ls -la'
+                sh 'cat .dockerignore || echo "No dockerignore found"'
+                sh 'find . -name "*.pem" || true'
             }
         }
 
