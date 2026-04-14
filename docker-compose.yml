@@ -5,6 +5,13 @@ services:
     image: mongo:7.0
     container_name: rocketchat_mongo
     restart: unless-stopped
+
+     command: [
+    "mongod",
+    "--replSet", "rs0",
+    "--bind_ip_all",
+    "--keyFile", "/etc/mongo-keyfile"
+  ]
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
@@ -13,35 +20,7 @@ services:
     volumes:
       - mongo_data:/data/db
 
-    # Starts MongoDB with replica set AND auto-initializes it in one command
-    entrypoint: >
-      bash -c "
-        mongod --replSet rs0 --bind_ip_all &
-        sleep 10 &&
-        mongosh --eval \"
-          try {
-            var status = rs.status();
-            if (status.myState !== 1) {
-              throw new Error('Not primary yet');
-            }
-            var cfg = rs.conf();
-            if (cfg.members[0].host !== 'mongodb:27017') {
-              cfg.members[0].host = 'mongodb:27017';
-              rs.reconfig(cfg, { force: true });
-              print('Replica set reconfigured to mongodb:27017');
-            } else {
-              print('Replica set already correctly configured');
-            }
-          } catch(e) {
-            rs.initiate({
-              _id: 'rs0',
-              members: [{ _id: 0, host: 'mongodb:27017' }]
-            });
-            print('Replica set initialized with host mongodb:27017');
-          }
-        \" &&
-        wait
-      "
+      
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
