@@ -1,3 +1,8 @@
+# Use Node 22.16.0 base image
+FROM node:22.16.0-bullseye AS builder
+
+# Set working directory
+WORKDIR /app
 
 # Install required system dependencies
 RUN apt-get update && apt-get install -y \
