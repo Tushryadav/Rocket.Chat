@@ -10,23 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user (security best practice)
-RUN useradd -m -s /bin/bash appuser
-
-# Set ownership (important if writing files/logs)
-COPY --chown=appuser:appuser . /app
-
 # Drop privileges
-USER appuser
-
-WORKDIR /app
-
-# Expose application port
-EXPOSE 3000
+USER rocketchat
 
 # Healthcheck (helps orchestration & monitoring)
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
  CMD node -e "require('http').get('http://localhost:3000/api/v1/info', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
-# Default command (keep original behavior)
-CMD ["node", "main.js"]
