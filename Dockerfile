@@ -1,45 +1,32 @@
-# Use Node 22.16.0 base image
-FROM node:22.16.0-bullseye AS builder
+# Use official Rocket.Chat image (DO NOT rebuild app)
+FROM rocketchat/rocket.chat:6.8.0
 
-# Set working directory
-WORKDIR /app
+# Switch to root to make controlled changes
+USER root
 
-# Install required system dependencies
-RUN apt-get update && apt-get install -y \
-     curl \
-     build-essential \
-     python3 \
-     git \
-     && rm -rf /var/lib/apt/lists/*
+# Install minimal required tools (no bloat)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g deno
-# Install global tools (ONLY what matters)
-RUN npm install -g node-gyp
+# Create non-root user (security best practice)
+RUN useradd -m -s /bin/bash appuser
 
-RUN corepack enable
-RUN corepack prepare yarn@4.12.0 --activate
+# Set ownership (important if writing files/logs)
+RUN chown -R appuser:appuser /app
 
-
-# Copy rest of source (controlled by .dockerignore)
-COPY . .
-
-# Install dependencies
-RUN yarn install
-
-
-# Build app
-RUN yarn build
-
-# ---------- Stage 2: Runtime ----------
-FROM node:22-alpine
+# Drop privileges
+USER appuser
 
 WORKDIR /app
 
-# Copy only built output
-COPY --from=builder /app /app
-
-# Expose port (Rocket.Chat default)
+# Expose application port
 EXPOSE 3000
 
-# Start dev server
+# Healthcheck (helps orchestration & monitoring)
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:3000 || exit 1
+
+# Default command (keep original behavior)
 CMD ["node", "main.js"]
