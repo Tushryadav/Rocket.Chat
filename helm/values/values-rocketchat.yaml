@@ -3,7 +3,7 @@ rocketchat:
   rootUrl: "http://rocketchat.local"
   image:
     repository: registry.rocket.chat/rocketchat/rocket.chat
-    tag: latest
+    tag: 6.8.0
     pullPolicy: IfNotPresent
   ingress:
     enabled: true
