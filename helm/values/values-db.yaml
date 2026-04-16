@@ -1,0 +1,16 @@
+mongodb:
+  replicaCount: 1
+  image:
+    repository: mongo
+    tag: 7.0
+    pullPolicy: IfNotPresent
+  auth:
+    rootUser: rocketchat
+    rootPassword: verysecurepassword
+  resources:
+    limits:
+      cpu: "1.0"
+      memory: "2Gi"
+    requests:
+      cpu: "500m"
+      memory: "1Gi"

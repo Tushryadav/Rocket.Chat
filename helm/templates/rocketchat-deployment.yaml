@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-rocketchat
+  labels:
+    app: rocketchat
+spec:
+  replicas: {{ .Values.rocketchat.replicaCount }}
+  selector:
+    matchLabels:
+      app: rocketchat
+  template:
+    metadata:
+      labels:
+        app: rocketchat
+    spec:
+      volumes:
+        - name: rocketchat-uploads
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-rocketchat-uploads
+      containers:
+        - name: rocketchat
+          image: "{{ .Values.rocketchat.image.repository }}:{{ .Values.rocketchat.image.tag }}"
+          imagePullPolicy: {{ .Values.rocketchat.image.pullPolicy }}
+          env:
+            - name: PORT
+              value: "3000"
+            - name: ROOT_URL
+              value: "{{ .Values.rocketchat.rootUrl }}"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-rocketchat-secret
+                  key: mongo-root-user
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-rocketchat-secret
+                  key: mongo-root-password
+            - name: MONGO_URL
+              value: "mongodb://$(DB_USER):$(DB_PASS)@{{ .Release.Name }}-mongodb:27017/rocketchat?replicaSet=rs0&authSource=admin"
+            - name: MONGO_OPLOG_URL
+              value: "mongodb://$(DB_USER):$(DB_PASS)@{{ .Release.Name }}-mongodb:27017/local?replicaSet=rs0"
+            - name: DEPLOY_METHOD
+              value: "helm"
+          ports:
+            - containerPort: 3000
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /api/v1/info
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/v1/info
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: rocketchat-uploads
+              mountPath: /app/uploads
+          resources:
+            {{- toYaml .Values.rocketchat.resources | nindent 12 }}
+      

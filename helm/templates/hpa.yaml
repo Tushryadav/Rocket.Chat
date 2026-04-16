@@ -1,0 +1,28 @@
+{{- if .Values.rocketchat.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}-rocketchat
+  labels:
+    app: rocketchat
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}-rocketchat
+  minReplicas: {{ .Values.rocketchat.hpa.minReplicas }}
+  maxReplicas: {{ .Values.rocketchat.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.rocketchat.hpa.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.rocketchat.hpa.targetMemoryUtilizationPercentage }}
+{{- end }}

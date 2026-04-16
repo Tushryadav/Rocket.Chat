@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-mongodb-init
+  labels:
+    app: mongodb
+data:
+  mongo-init.js: |
+    rs.initiate({
+        _id: "rs0",
+        version: 1,
+        members: [
+           { _id: 0, host : "{{ .Release.Name }}-mongodb-0.{{ .Release.Name }}-mongodb:27017" }
+        ]
+    });
