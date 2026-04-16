@@ -15,20 +15,7 @@ spec:
       labels:
         app: mongodb
     spec:
-      initContainers:
-      - name: mongo-init
-        image: "{{ .Values.mongodb.image.repository }}:{{ .Values.mongodb.image.tag }}"
-        command:
-          - bash
-          - -c
-          - |
-            until mongosh {{ .Release.Name }}-mongodb-0.{{ .Release.Name }}-mongodb:27017 --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
-              echo "Waiting for Mongo..."
-              sleep 2
-            done
-
-            mongosh {{ .Release.Name }}-mongodb-0.{{ .Release.Name }}-mongodb:27017 /scripts/mongo-init.js
-        volumeMounts:
+      volumeMounts:
           - name: mongo-init-js
             mountPath: /scripts/mongo-init.js
             subPath: mongo-init.js
@@ -78,6 +65,20 @@ spec:
             - name: mongo-init-js
               mountPath: /scripts/mongo-init.js
               subPath: mongo-init.js
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - bash
+                  - -c
+                  - |
+                    echo "Waiting for MongoDB to start..."
+      
+                    until mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
+                      sleep 2
+                    done
+      
+                    mongosh {{ .Release.Name }}-mongodb-0.{{ .Release.Name }}-mongodb:27017 /scripts/mongo-init.js
           resources:
             {{- toYaml .Values.mongodb.resources | nindent 12 }}
           livenessProbe:
