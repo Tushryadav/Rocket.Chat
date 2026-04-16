@@ -5,6 +5,9 @@ rocketchat:
     repository: registry.rocket.chat/rocketchat/rocket.chat
     tag: latest
     pullPolicy: IfNotPresent
+  ingress:
+    enabled: true
+    className: nginx
   service:
     type: ClusterIP
     port: 3000
