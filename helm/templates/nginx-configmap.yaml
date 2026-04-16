@@ -12,12 +12,7 @@ data:
     http {
         server {
             listen 8080;
-            listen 8443 ssl;
             server_name _;
-            
-            # Temporary dummy ssl certs for example
-            # ssl_certificate /etc/nginx/cert.crt;
-            # ssl_certificate_key /etc/nginx/cert.key;
 
             location / {
                 proxy_pass http://{{ .Release.Name }}-rocketchat:3000;
