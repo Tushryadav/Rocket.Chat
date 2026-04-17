@@ -1,5 +1,4 @@
-{{- if .Values.rocketchat.ingress.enabled -}}
-{{- if .Values.rocketchat.ingress.hosts }}
+{{- if and .Values.rocketchat.enabled .Values.rocketchat.ingress.enabled .Values.rocketchat.ingress.hosts }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -23,5 +22,6 @@ spec:
                   number: {{ $.Values.rocketchat.service.port }}
           {{- end }}
     {{- end }}
+
 {{- end }}
-{{- end }}
+ 
