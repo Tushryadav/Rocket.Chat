@@ -5,7 +5,7 @@ metadata:
   labels:
     app: rocketchat
 spec:
-  replicas: {{ .Values.rocketchat.replicaCount }}
+  replicas: null
   selector:
     matchLabels:
       app: rocketchat

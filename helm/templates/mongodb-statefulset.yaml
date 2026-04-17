@@ -15,11 +15,6 @@ spec:
       labels:
         app: mongodb
     spec:
-      volumeMounts:
-          - name: mongo-init-js
-            mountPath: /scripts/mongo-init.js
-            subPath: mongo-init.js
-
       volumes:
         - name: mongo-keyfile
           secret:
@@ -35,7 +30,8 @@ spec:
         - name: mongodb
           image: "{{ .Values.mongodb.image.repository }}:{{ .Values.mongodb.image.tag }}"
           imagePullPolicy: {{ .Values.mongodb.image.pullPolicy }}
-          command:
+
+          command:  
             - docker-entrypoint.sh
             - mongod
             - --replSet
@@ -72,13 +68,20 @@ spec:
                   - bash
                   - -c
                   - |
-                    echo "Waiting for MongoDB to start..."
-      
-                    until mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
-                      sleep 2
+                    echo "Waiting for MongoDB..."
+                    until mongosh --host {{ .Release.Name }}-mongodb:27017 \
+                        -u $MONGO_INITDB_ROOT_USERNAME \
+                        -p $MONGO_INITDB_ROOT_PASSWORD \
+                        --authenticationDatabase admin \
+                        --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
+                        sleep 3
                     done
-      
-                    mongosh {{ .Release.Name }}-mongodb-0.{{ .Release.Name }}-mongodb:27017 /scripts/mongo-init.js
+                    echo "Initializing replica set... 
+                    mongosh --host {{ .Release.Name }}-mongodb:27017 \
+                        -u $MONGO_INITDB_ROOT_USERNAME \
+                        -p $MONGO_INITDB_ROOT_PASSWORD \
+                        --authenticationDatabase admin \
+                        /scripts/init.js
           resources:
             {{- toYaml .Values.mongodb.resources | nindent 12 }}
           livenessProbe:
@@ -92,4 +95,16 @@ spec:
                 - --eval
                 - "db.adminCommand('ping')"
             initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - mongosh
+                - -u
+                - $(MONGO_INITDB_ROOT_USERNAME)
+                - -p
+                - $(MONGO_INITDB_ROOT_PASSWORD)
+                - --eval
+                - "if (rs.status().ok !== 1) { quit(1); }"
+            initialDelaySeconds: 5
             periodSeconds: 10

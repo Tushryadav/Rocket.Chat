@@ -3,11 +3,17 @@ rocketchat:
   rootUrl: "http://rocketchat.local"
   image:
     repository: registry.rocket.chat/rocketchat/rocket.chat
-    tag: 6.8.0
+    tag: latest
     pullPolicy: IfNotPresent
+
   ingress:
     enabled: true
     className: nginx
+    hosts:
+      - host: /etc/hosts   # change this
+        paths:
+          - path: /
+            pathType: Prefix
   service:
     type: ClusterIP
     port: 3000
@@ -24,3 +30,28 @@ rocketchat:
     requests:
       cpu: "500m"
       memory: "1Gi"
+  persistence:
+    storageClassName: "standard"
+
+mongodb:
+  auth:
+    rootUser: admin
+    rootPassword: strongpassword123
+
+nginx:
+  replicaCount: 1
+  image:
+    repository: nginx
+    tag: alpine
+    pullPolicy: IfNotPresent
+  service:
+    type: LoadBalancer
+    httpPort: 80
+    httpsPort: 443
+  resources:
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
