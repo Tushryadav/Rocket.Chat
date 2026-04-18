@@ -159,13 +159,7 @@ Health checks are defined at every layer:
 
 ## Quick Start
 
-### 1. Provision a VM (Azure)
-
-- Size: `Standard_B4ms` (4 vCPU, 16GB RAM)
-- OS: Ubuntu 22.04 LTS
-- Open inbound ports: `22`, `80`, `443`
-
-### 2. Install k3s
+### 1. Install k3s
 
 ```bash
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
@@ -174,7 +168,7 @@ export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> ~/.bashrc
 ```
 
-### 3. Install Longhorn
+### 2. Install Longhorn
 
 ```bash
 sudo apt install -y open-iscsi nfs-common
@@ -192,7 +186,7 @@ kubectl patch storageclass local-path \
   -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 ```
 
-### 4. Install Nginx Ingress
+### 3. Install Nginx Ingress
 
 ```bash
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx && helm repo update
@@ -202,7 +196,7 @@ helm install ingress-nginx ingress-nginx/ingress-nginx \
   --create-namespace
 ```
 
-### 5. Configure Values
+### 4. Configure Values
 
 ```bash
 PUBLIC_IP=$(curl -s ifconfig.me)
@@ -216,7 +210,7 @@ nano helm/values/values-rocketchat.yaml
 # Change: rootPassword: "CHANGE_ME"
 ```
 
-### 6. Deploy
+### 5. Deploy
 
 ```bash
 helm install rocketchat ./helm \
@@ -225,7 +219,7 @@ helm install rocketchat ./helm \
   -f helm/values/values-rocketchat.yaml
 ```
 
-### 7. Watch it come up
+### 6. Watch it come up
 
 ```bash
 kubectl get pods -w
@@ -237,7 +231,7 @@ rocketchat-nginx-xxx           1/1   Running   ← Nginx reverse proxy
 rocketchat-rocketchat-xxx      1/1   Running   ← Rocket.Chat app
 ```
 
-### 8. Access
+### 7. Access
 
 ```
 http://<YOUR_PUBLIC_IP>.nip.io
