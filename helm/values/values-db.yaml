@@ -1,4 +1,5 @@
 mongodb:
+  enabled: true
   replicaCount: 1
   image:
     repository: mongo

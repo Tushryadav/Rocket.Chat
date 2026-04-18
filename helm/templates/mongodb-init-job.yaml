@@ -5,10 +5,10 @@ metadata:
   name: {{ .Release.Name }}-mongodb-init
   annotations:
     "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-weight": "1"
-    "helm.sh/hook-delete-policy": before-hook-creation
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": hook-succeeded
 spec:
-  backoffLimit: 10
+  backoffLimit: 20
   template:
     spec:
       restartPolicy: OnFailure
@@ -19,21 +19,23 @@ spec:
             - bash
             - -c
             - |
-              echo "Waiting for MongoDB to be ready..."
-              until mongosh --host {{ .Release.Name }}-mongodb:27017 \
-                  -u $MONGO_INITDB_ROOT_USERNAME \
-                  -p $MONGO_INITDB_ROOT_PASSWORD \
-                  --authenticationDatabase admin \
-                  --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
-                echo "Waiting..."
+              echo "Waiting for MongoDB to accept connections..."
+              until mongosh \
+                --host {{ .Release.Name }}-mongodb-0.{{ .Release.Name }}-mongodb.{{ .Release.Namespace }}.svc.cluster.local:27017 \
+                -u $MONGO_INITDB_ROOT_USERNAME \
+                -p $MONGO_INITDB_ROOT_PASSWORD \
+                --authenticationDatabase admin \
+                --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
+                echo "Still waiting..."
                 sleep 5
               done
-              echo "Running replica set init..."
-              mongosh --host {{ .Release.Name }}-mongodb:27017 \
-                  -u $MONGO_INITDB_ROOT_USERNAME \
-                  -p $MONGO_INITDB_ROOT_PASSWORD \
-                  --authenticationDatabase admin \
-                  /scripts/mongo-init.js
+              echo "MongoDB ready. Running replica set init..."
+              mongosh \
+                --host {{ .Release.Name }}-mongodb-0.{{ .Release.Name }}-mongodb.{{ .Release.Namespace }}.svc.cluster.local:27017 \
+                -u $MONGO_INITDB_ROOT_USERNAME \
+                -p $MONGO_INITDB_ROOT_PASSWORD \
+                --authenticationDatabase admin \
+                /scripts/mongo-init.js
           env:
             - name: MONGO_INITDB_ROOT_USERNAME
               valueFrom:
