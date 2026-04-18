@@ -1,123 +1,380 @@
-<p align="center"> 
-  <img  src="https://github.com/RocketChat/Rocket.Chat.Artwork/raw/master/Logos/2020/png/logo-horizontal-red.png" data-canonical-src="https://github.com/RocketChat/Rocket.Chat.Artwork/raw/master/Logos/2020/png/logo-horizontal-red.png" width="400" />
-</p>
+# Rocket.Chat — Production DevOps Pipeline
 
-<h1 align="center">
-  The ultimate secure open-source solution for team communications
-</h1>
+A full end-to-end DevOps pipeline for deploying Rocket.Chat in production — covering secure Docker builds, vulnerability scanning, CI/CD automation with Jenkins, and a Kubernetes deployment managed entirely through Helm.
 
-<p align="center">
-  <img src="https://img.shields.io/github/v/release/RocketChat/Rocket.Chat?label=version">
-  <img src="https://img.shields.io/github/actions/workflow/status/RocketChat/Rocket.Chat/build_and_test.yml">
-  <img src="https://img.shields.io/badge/license-MIT-green">
-  <img alt="Codecov branch" src="https://img.shields.io/codecov/c/github/RocketChat/Rocket.Chat/develop">
-</p>
+Built and tested on a fresh Azure VM. Single `helm install` — no manual steps.
 
+> **Follow the build:** [LinkedIn](https://linkedin.com/in/tushar-yadav-6323a1219) · [Twitter/X](https://twitter.com/yadavtushr)
 
+-----
 
-[Rocket.Chat](https://rocket.chat) is an open-source, secure, fully customizable communications platform developed in TypeScript for organizations with high standards of data protection.
+## What’s Inside
 
-We are the ultimate solution for team communications, enabling real-time conversations between colleagues, with other companies, and with your customers or citizens, regardless of how they connect with you. The result is an increase in productivity and user satisfaction rates.
+```
+Rocket.Chat/
+├── Dockerfile                      # Hardened multi-stage Docker build
+├── Jenkinsfile                     # CI/CD pipeline with Trivy scanning
+└── helm/
+    ├── Chart.yaml
+    ├── values/
+    │   ├── values-db.yaml          # MongoDB config
+    │   ├── values-nginx.yaml       # Nginx config
+    │   └── values-rocketchat.yaml  # App + ingress + HPA config
+    └── templates/
+        ├── secrets.yaml
+        ├── mongodb-statefulset.yaml
+        ├── mongodb-svc.yaml
+        ├── mongodb-pvc.yaml
+        ├── mongodb-configmap.yaml
+        ├── mongodb-init-job.yaml
+        ├── rocketchat-deployment.yaml
+        ├── rocketchat-svc.yaml
+        ├── rocketchat-pvc.yaml
+        ├── nginx-deployment.yaml
+        ├── nginx-svc.yaml
+        ├── nginx-configmap.yaml
+        ├── ingress.yaml
+        └── hpa.yaml
+```
 
-Every day, tens of millions of users in over 150 countries and in organizations such as Deutsche Bahn, The US Navy, and Credit Suisse trust Rocket.Chat to keep their communications completely private and secure.
+-----
 
-# 🚀 Platform overview
+## Architecture
 
-Rocket.Chat provides endless possibilities. Here’s an overview of the features you benefit from:
+```
+External Traffic (Users / Clients)
+            │
+            ▼
+    Cloud Load Balancer
+    (AWS ALB / GCP LB / Azure)
+            │
+            ▼
+    Nginx Ingress Controller
+    (TLS termination · routing · rate limiting)
+            │
+      ┌─────┴──────────────┐
+      │                    │
+      ▼                    ▼
+ ClusterIP: nginx     ClusterIP: rocketchat
+ HPA (min 1 · max 5)  HPA (min 1 · max 3)
+ Deployment           Deployment
+ nginx pods           Rocket.Chat pods
+                           │
+                           ▼
+                   ClusterIP: mongodb
+                   StatefulSet (RS mode)
+                   pod: mongo-0 (primary)
+                   PVC → Longhorn (15Gi RWX)
+```
 
-💬 [**Team collaboration**](https://docs.rocket.chat/docs/collaborate-using-rocketchat): A single point for secure internal and cross-company collaboration with role-based access control.
+|Component  |Type          |Details                           |
+|-----------|--------------|----------------------------------|
+|Rocket.Chat|Deployment    |v6.8.0, HPA min 1 max 3           |
+|MongoDB    |StatefulSet   |v7.0, replica set rs0             |
+|Nginx      |Deployment    |Alpine, reverse proxy + WebSocket |
+|Ingress    |Ingress       |nginx class, nip.io host          |
+|Storage    |Longhorn RWX  |15Gi MongoDB · 10Gi uploads       |
+|Secrets    |Auto-generated|MongoDB keyfile via `randAlphaNum`|
 
-🎯 [**Omnichannel citizen engagement**](https://docs.rocket.chat/docs/omnichannel): Seamless digital interactions with your citizens and customers across platforms like WhatsApp, SMS, and more.
+-----
 
-🦾 [**Optimization**](https://docs.rocket.chat/docs/optimize-your-workspace): Enhance productivity with self-hosted AI and a customizable and accessible workspace.
+## CI/CD Pipeline
 
-🤖 [**Extend and integrate**](https://docs.rocket.chat/docs/extend-and-integrate-rocketchat-capabilities): Install and use public apps from the Rocket.Chat Marketplace, build your own apps, and embed the workspace into your platform.
+Every push triggers the Jenkins pipeline:
 
-<img src="https://global-uploads.webflow.com/611a19b9853b7414a0f6b3f6/6319c72bbd8af5c8c22efab6_heroImage.webp" data-canonical-src="https://global-uploads.webflow.com/611a19b9853b7414a0f6b3f6/6319c72bbd8af5c8c22efab6_heroImage.webp"  />
+```
+Code Push
+    │
+    ▼
+┌──────────────────────────────────────┐
+│           Jenkins Pipeline           │
+│                                      │
+│  1. Checkout                         │
+│  2. Docker Build                     │
+│  3. Trivy Scan ──► FAIL if critical  │
+│  4. Push to ACR                      │
+│  5. helm upgrade (on merge to main)  │
+└──────────────────────────────────────┘
+```
 
-# 💻 Deploy Rocket.Chat
+**Trivy** scans every image before it is pushed to Azure Container Registry. If a critical vulnerability is found the pipeline fails — the image never ships. No exceptions.
 
-We support different methods of deployment for different needs. Choose your method:
+```groovy
+// Jenkinsfile excerpt
+stage('Trivy Scan') {
+    steps {
+        sh 'trivy image --exit-code 1 --severity CRITICAL myapp:${BUILD_NUMBER}'
+    }
+}
+```
 
-- Are you deploying Rocket.Chat on your own servers? You can deploy using one of the recommended methods: Docker, Podman, or Kubernetes. Refer to the [Deployment Guide](https://docs.rocket.chat/docs/deploy-rocketchat) for details. Before you deploy, make sure to check the [system requirements](https://docs.rocket.chat/docs/system-requirements) to deploy a workspace successfully. Alternatively, deploy Rocket.Chat using [Launchpad](https://docs.rocket.chat/docs/deploy-with-launchpad) for a quick and straightforward Kubernetes setup where you don't have to manage each dependency.
+-----
 
-- Do you need to run the workspace on an isolated network? Set up an [air-gapped workspace](https://docs.rocket.chat/docs/rocketchat-air-gapped-deployment) to use Rocket.Chat without internet access, suitable for high-security or regulated environments.
+## Docker — Security Hardening
 
-- Looking for a custom cloud-hosted solution without handling infrastructure? Check out our premium, dedicated [cloud hosting options](https://docs.rocket.chat/docs/rocketchat-cloud-hosting-service-level-agreement-sla) that adapt to your needs.
+The Dockerfile uses a multi-stage build to keep the runtime image minimal and secure:
 
-- Interested in decentralized communication? Enable [federation](https://docs.rocket.chat/docs/rocketchat-native-federation) to securely communicate and share resources across a federated network.
+- Base image pinned to a specific digest — no surprise upstream changes
+- Build dependencies removed from the final image
+- Runs as a non-root user
+- No unnecessary packages in the runtime layer
+- Layers optimised to minimise attack surface
 
-# 📱 Desktop and mobile apps
+-----
 
-In addition to the web app, you can also download the Rocket.Chat mobile app:
+## Health Checks
 
-[![Rocket.Chat on Apple App Store](https://user-images.githubusercontent.com/551004/29770691-a2082ff4-8bc6-11e7-89a6-964cd405ea8e.png)](https://itunes.apple.com/us/app/rocket-chat/id1148741252?mt=8) [![Rocket.Chat on Google Play](https://user-images.githubusercontent.com/551004/29770692-a20975c6-8bc6-11e7-8ab0-1cde275496e0.png)](https://play.google.com/store/apps/details?id=chat.rocket.android)
+Health checks are defined at every layer:
 
-Download the desktop app:
-- [Download on the Mac App Store](https://apps.apple.com/us/app/rocket-chat/id1086818840?mt=12)
-- [Install from the Windows Store](https://apps.microsoft.com/detail/9nblggh52jv6?hl=en-us&gl=NG&ocid=pdpshare)
-- [Get from Snapcraft for Linux](https://snapcraft.io/rocketchat-desktop) or use the command `sudo snap install rocketchat-desktop`
+**Container level — Kubernetes probes**
 
-Refer to the [Installation guide](https://docs.rocket.chat/docs/desktop-mobile-apps) for further details.
+|Probe        |Rocket.Chat       |MongoDB                  |
+|-------------|------------------|-------------------------|
+|Liveness     |`GET /api/v1/info`|`db.adminCommand('ping')`|
+|Readiness    |`GET /api/v1/info`|`db.adminCommand('ping')`|
+|Initial delay|60s               |30s                      |
+|Period       |15s               |10s                      |
 
-# 📖 Rocket.Chat documentation
+**Pipeline level — Jenkins**
 
-- [User documentation](https://docs.rocket.chat/docs/rocketchat)
-- [Administrator's guide](https://docs.rocket.chat/docs/administrators-guide)
-- [Developer documentation](https://developer.rocket.chat/docs/rocketchat-developer)
-- [API documentation](https://developer.rocket.chat/apidocs)
-- [YouTube Rocket.Chat Learning Center](https://www.youtube.com/playlist?list=PLee3gqXJQrFVXnNs5GiuoTMy269ydvcOB)
+- Trivy scan must pass before image is pushed
+- `helm lint` validates chart before deploy
+- Deployment only proceeds if all stages are green
 
-# 🛡️ Trust and compliance
+-----
 
-The architecture of Rocket.Chat is designed to protect sensitive data, enforce rigorous compliance, and ensure secure, reliable communications for governments, defense, and critical infrastructure organizations operating in high-stakes environments.
+## Prerequisites
 
-- **[Trust Center](https://trust.rocket.chat/)**: The Trust Center provides a comprehensive view of how we protect data and maintain transparency. You will find details on our security practices, privacy commitments, compliance certifications, and governance policies.
+|Tool          |Version|Purpose                |
+|--------------|-------|-----------------------|
+|Kubernetes    |1.25+  |Cluster (tested on k3s)|
+|Helm          |3.x    |Chart management       |
+|Longhorn      |1.11+  |RWX storage class      |
+|Nginx Ingress |Any    |Ingress controller     |
+|metrics-server|Any    |Required for HPA       |
+|Jenkins       |2.x+   |CI/CD                  |
+|Trivy         |Latest |Vulnerability scanning |
 
-- **[Compliance Center](https://docs.rocket.chat/docs/compliance-center)**: Explore the Compliance Center for additional information on how we commit to providing modern collaboration while protecting sensitive data.
+-----
 
-# 🛠️ Additional resources for developers
+## Quick Start
 
-You can set up a Rocket.Chat development environment by following the guides below:
+### 1. Provision a VM (Azure)
 
-- **[Server](https://developer.rocket.chat/docs/server)**: See how to set up a Rocket.Chat server development environment on Linux distributions, Windows, Mac, and Gitpod.
+- Size: `Standard_B4ms` (4 vCPU, 16GB RAM)
+- OS: Ubuntu 22.04 LTS
+- Open inbound ports: `22`, `80`, `443`
 
-- **[Desktop](https://developer.rocket.chat/docs/desktop-app)**: Learn how to set up and customize a desktop development environment. You can follow and contribute to the [Rocket.Chat.Electron](https://github.com/RocketChat/Rocket.Chat.Electron) repository.
+### 2. Install k3s
 
-- **[Mobile](https://developer.rocket.chat/docs/mobile-app)**: Learn about mobile app development and configuring push notifications. You can follow and contribute to the [Rocket.Chat.ReactNative](https://github.com/RocketChat/Rocket.Chat.ReactNative) repository.
+```bash
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
 
-# 🧩 Apps-Engine
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> ~/.bashrc
+```
 
-Develop your own apps that can be integrated with Rocket.Chat. We provide an [open-source Apps-Engine framework](https://developer.rocket.chat/docs/rocketchat-apps-engine) which expands the integration possibilities within the Rocket.Chat ecosystem.
+### 3. Install Longhorn
 
-# 🆕 Feature request
+```bash
+sudo apt install -y open-iscsi nfs-common
+sudo systemctl enable iscsid && sudo systemctl start iscsid
 
-[Rocket.Chat/feature-requests](https://github.com/RocketChat/feature-requests) is used to track Rocket.Chat feature requests and discussions. Click [here](https://github.com/RocketChat/feature-requests/issues/new?template=feature_request.md) to open a new feature request. [Feature Request Forums](https://forums.rocket.chat/c/feature-requests/8) stores the historical archives of old feature requests (up to 2018).
+helm repo add longhorn https://charts.longhorn.io && helm repo update
 
-# 🤝 Community
+helm install longhorn longhorn/longhorn \
+  --namespace longhorn-system \
+  --create-namespace \
+  --set defaultSettings.defaultReplicaCount=1
 
-Join thousands of members worldwide in our [community server](https://open.rocket.chat).
-Join [#support](https://open.rocket.chat/channel/support) and [#general](https://open.rocket.chat/channel/general) for help from the community.
+# Remove k3s local-path as default — Longhorn must be the only default
+kubectl patch storageclass local-path \
+  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+```
 
-![Alt](https://repobeats.axiom.co/api/embed/1efe0f0a7c366bd58068a1ab1f555ab912ec3895.svg "Repobeats analytics image")
+### 4. Install Nginx Ingress
 
-# 👥 Contributions
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx && helm repo update
 
-Rocket.Chat is an open-source project, and we are very happy to accept community contributions. Refer to the [Contribution guide](https://developer.rocket.chat/docs/contribute-to-rocketchat) for more details.
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --create-namespace
+```
 
+### 5. Configure Values
 
-# 💼 Become a Rocketeer
+```bash
+PUBLIC_IP=$(curl -s ifconfig.me)
 
-We're hiring developers, technical support, and product managers all the time. Check out our [jobs page](https://rocket.chat/jobs).
+# Set ingress host and rootUrl
+sed -i "s|<public_ip>|$PUBLIC_IP|g" helm/values/values-rocketchat.yaml
+sed -i "s|http://rocketchat.local|http://$PUBLIC_IP.nip.io|g" helm/values/values-rocketchat.yaml
 
-# 🗞️ Get the Latest News
+# Set a strong MongoDB password
+nano helm/values/values-rocketchat.yaml
+# Change: rootPassword: "CHANGE_ME"
+```
 
-- [Blog](https://rocket.chat/blog)
-- [Twitter](https://twitter.com/RocketChat)
-- [Facebook](https://www.facebook.com/RocketChatApp)
-- [LinkedIn](https://www.linkedin.com/company/rocket-chat)
-- [YouTube](https://www.youtube.com/channel/UCin9nv7mUjoqrRiwrzS5UVQ)
+### 6. Deploy
 
-# 🗒️ Credits
+```bash
+helm install rocketchat ./helm \
+  -f helm/values/values-db.yaml \
+  -f helm/values/values-nginx.yaml \
+  -f helm/values/values-rocketchat.yaml
+```
 
-- Emoji provided graciously by [JoyPixels](https://www.joypixels.com).
+### 7. Watch it come up
+
+```bash
+kubectl get pods -w
+```
+
+```
+rocketchat-mongodb-0           1/1   Running   ← MongoDB + replica set auto-init
+rocketchat-nginx-xxx           1/1   Running   ← Nginx reverse proxy
+rocketchat-rocketchat-xxx      1/1   Running   ← Rocket.Chat app
+```
+
+### 8. Access
+
+```
+http://<YOUR_PUBLIC_IP>.nip.io
+```
+
+-----
+
+## Values Reference
+
+### `values-db.yaml`
+
+|Key                                   |Default   |Description    |
+|--------------------------------------|----------|---------------|
+|`mongodb.enabled`                     |`true`    |Enable MongoDB |
+|`mongodb.replicaCount`                |`1`       |Number of pods |
+|`mongodb.image.tag`                   |`7.0`     |MongoDB version|
+|`mongodb.resources.limits.cpu`        |`1.0`     |CPU limit      |
+|`mongodb.resources.limits.memory`     |`2Gi`     |Memory limit   |
+|`mongodb.persistence.storageClassName`|`longhorn`|Storage class  |
+
+### `values-nginx.yaml`
+
+|Key                            |Default   |Description |
+|-------------------------------|----------|------------|
+|`nginx.enabled`                |`true`    |Enable Nginx|
+|`nginx.service.type`           |`NodePort`|Service type|
+|`nginx.resources.limits.cpu`   |`500m`    |CPU limit   |
+|`nginx.resources.limits.memory`|`256Mi`   |Memory limit|
+
+### `values-rocketchat.yaml`
+
+|Key                                            |Default             |Description                      |
+|-----------------------------------------------|--------------------|---------------------------------|
+|`rocketchat.rootUrl`                           |`http://<ip>.nip.io`|Public URL — **must be set**     |
+|`rocketchat.image.tag`                         |`6.8.0`             |App version                      |
+|`rocketchat.hpa.minReplicas`                   |`1`                 |HPA min pods                     |
+|`rocketchat.hpa.maxReplicas`                   |`3`                 |HPA max pods                     |
+|`rocketchat.hpa.targetCPUUtilizationPercentage`|`80`                |CPU scale threshold              |
+|`rocketchat.resources.limits.cpu`              |`2.0`               |CPU limit                        |
+|`rocketchat.resources.limits.memory`           |`2Gi`               |Memory limit                     |
+|`mongodb.auth.rootPassword`                    |`CHANGE_ME`         |**Must be changed before deploy**|
+
+-----
+
+## Known Issues & Solutions
+
+### MongoDB keyfile permissions over NFS
+
+**Problem:** Longhorn RWX uses NFS internally. NFS ignores Unix file permissions. MongoDB requires the keyfile at exactly `0400` or it refuses to start with `Unable to acquire security key[s]`.
+
+**Solution:** An init container copies the keyfile from the Secret to an `emptyDir` volume with correct permissions before MongoDB starts. NFS never touches it.
+
+```yaml
+initContainers:
+  - name: keyfile-init
+    image: busybox
+    command:
+      - sh
+      - -c
+      - |
+        cp /secret/mongo-keyfile /keyfile/mongo-keyfile
+        chmod 0400 /keyfile/mongo-keyfile
+        chown 999:999 /keyfile/mongo-keyfile
+```
+
+-----
+
+### Replica set init timing
+
+**Problem:** Using a `postStart` lifecycle hook for `rs.initiate()` is unreliable — Kubernetes kills the container if the hook takes too long, causing a crash loop with no clear error.
+
+**Solution:** A dedicated Helm `post-install` Job polls MongoDB until ready then runs `rs.initiate()` using the full FQDN. Retries 20 times. Deletes itself on success.
+
+```
+<release>-mongodb-0.<release>-mongodb.<namespace>.svc.cluster.local:27017
+```
+
+-----
+
+### Two default storage classes
+
+**Problem:** k3s ships `local-path` as default. Longhorn registers as a second default. Two defaults cause unpredictable PVC binding — PVCs stay Pending on fresh installs.
+
+**Solution:**
+
+```bash
+kubectl patch storageclass local-path \
+  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+```
+
+-----
+
+## Useful Commands
+
+```bash
+# Full status overview
+kubectl get pods,svc,ingress,pvc,hpa,jobs
+
+# Check MongoDB replica set
+kubectl exec -it rocketchat-mongodb-0 -- mongosh \
+  -u admin -p <password> --authenticationDatabase admin \
+  --eval "rs.status().members[0].stateStr"
+
+# Rocket.Chat logs
+kubectl logs -f deployment/rocketchat-rocketchat
+
+# Check HPA
+kubectl get hpa
+
+# Upgrade after changes
+helm upgrade rocketchat ./helm \
+  -f helm/values/values-db.yaml \
+  -f helm/values/values-nginx.yaml \
+  -f helm/values/values-rocketchat.yaml
+
+# Full teardown
+helm uninstall rocketchat
+kubectl delete pvc --all --force --grace-period=0
+```
+
+-----
+
+## Roadmap
+
+- [ ] Namespace isolation — `rocketchat-db` / `rocketchat-nginx` / `rocketchat-build`
+- [ ] ResourceQuota per namespace (CPU / memory / pods / storage)
+- [ ] `helm upgrade` wired into Jenkins CI/CD on merge to main
+- [ ] Startup probes + PodDisruptionBudgets
+- [ ] Pipeline-level smoke tests after deployment
+- [ ] TLS via cert-manager + Let’s Encrypt
+- [ ] MongoDB 3-node replica set for HA
+- [ ] External Secrets Operator for credential management
+
+-----
+
+## Author
+
+**Tushar Yadav** — DevOps Engineer @ Healthmug
+
+[LinkedIn](https://linkedin.com/in/tushar-yadav-6323a1219) · [Twitter/X](https://twitter.com/yadavtushr) · [GitHub](https://github.com/Tushryadav)
