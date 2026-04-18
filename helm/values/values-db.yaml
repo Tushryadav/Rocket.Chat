@@ -15,4 +15,4 @@ mongodb:
       cpu: "500m"
       memory: "1Gi"
   persistence:
-    storageClassName: "standard"
+    storageClassName: "longhorn"

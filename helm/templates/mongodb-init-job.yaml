@@ -1,0 +1,56 @@
+{{- if .Values.mongodb.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-mongodb-init
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mongo-init
+          image: "{{ .Values.mongodb.image.repository }}:{{ .Values.mongodb.image.tag }}"
+          command:
+            - bash
+            - -c
+            - |
+              echo "Waiting for MongoDB to be ready..."
+              until mongosh --host {{ .Release.Name }}-mongodb:27017 \
+                  -u $MONGO_INITDB_ROOT_USERNAME \
+                  -p $MONGO_INITDB_ROOT_PASSWORD \
+                  --authenticationDatabase admin \
+                  --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
+                echo "Waiting..."
+                sleep 5
+              done
+              echo "Running replica set init..."
+              mongosh --host {{ .Release.Name }}-mongodb:27017 \
+                  -u $MONGO_INITDB_ROOT_USERNAME \
+                  -p $MONGO_INITDB_ROOT_PASSWORD \
+                  --authenticationDatabase admin \
+                  /scripts/mongo-init.js
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-rocketchat-secret
+                  key: mongo-root-user
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-rocketchat-secret
+                  key: mongo-root-password
+          volumeMounts:
+            - name: mongo-init-js
+              mountPath: /scripts/mongo-init.js
+              subPath: mongo-init.js
+      volumes:
+        - name: mongo-init-js
+          configMap:
+            name: {{ .Release.Name }}-mongodb-init
+{{- end }}

@@ -16,21 +16,37 @@ spec:
         app: mongodb
     spec:
       volumes:
-        - name: mongo-keyfile
+        - name: mongo-keyfile          # secret source (must be here)
           secret:
             secretName: {{ .Release.Name }}-mongodb-key
             defaultMode: 0400
+        - name: mongo-keyfile-dir
+          emptyDir: {}
         - name: mongo-init-js
           configMap:
             name: {{ .Release.Name }}-mongodb-init
         - name: mongopvc
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-mongo-pvc
+      initContainers:
+        - name: keyfile-init
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              cp /secret/mongo-keyfile /keyfile/mongo-keyfile
+              chmod 0400 /keyfile/mongo-keyfile
+              chown 999:999 /keyfile/mongo-keyfile
+          volumeMounts:
+            - name: mongo-keyfile
+              mountPath: /secret
+            - name: mongo-keyfile-dir
+              mountPath: /keyfile
       containers:
         - name: mongodb
           image: "{{ .Values.mongodb.image.repository }}:{{ .Values.mongodb.image.tag }}"
           imagePullPolicy: {{ .Values.mongodb.image.pullPolicy }}
-
           command:  
             - docker-entrypoint.sh
             - mongod
@@ -56,11 +72,11 @@ spec:
           volumeMounts:
             - name: mongopvc
               mountPath: /data/db
-            - name: mongo-keyfile
-              mountPath: /etc/mongo-keyfile
             - name: mongo-init-js
               mountPath: /scripts/mongo-init.js
               subPath: mongo-init.js
+            - name: mongo-keyfile-dir
+              mountPath: /etc/mongo-keyfile
           lifecycle:
             postStart:
               exec:
@@ -68,20 +84,6 @@ spec:
                   - bash
                   - -c
                   - |
-                    echo "Waiting for MongoDB..."
-                    until mongosh --host {{ .Release.Name }}-mongodb:27017 \
-                        -u $MONGO_INITDB_ROOT_USERNAME \
-                        -p $MONGO_INITDB_ROOT_PASSWORD \
-                        --authenticationDatabase admin \
-                        --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
-                        sleep 3
-                    done
-                    echo "Initializing replica set... 
-                    mongosh --host {{ .Release.Name }}-mongodb:27017 \
-                        -u $MONGO_INITDB_ROOT_USERNAME \
-                        -p $MONGO_INITDB_ROOT_PASSWORD \
-                        --authenticationDatabase admin \
-                        /scripts/init.js
           resources:
             {{- toYaml .Values.mongodb.resources | nindent 12 }}
           livenessProbe:
@@ -92,6 +94,8 @@ spec:
                 - $(MONGO_INITDB_ROOT_USERNAME)
                 - -p
                 - $(MONGO_INITDB_ROOT_PASSWORD)
+                - --authenticationDatabase
+                - admin
                 - --eval
                 - "db.adminCommand('ping')"
             initialDelaySeconds: 30
@@ -104,7 +108,9 @@ spec:
                 - $(MONGO_INITDB_ROOT_USERNAME)
                 - -p
                 - $(MONGO_INITDB_ROOT_PASSWORD)
+                - --authenticationDatabase
+                - admin
                 - --eval
-                - "if (rs.status().ok !== 1) { quit(1); }"
+                - "db.adminCommand('ping')"
             initialDelaySeconds: 5
             periodSeconds: 10
