@@ -12,6 +12,7 @@ pipeline {
         KUBECONFIG_CRED  = 'k8s-kubeconfig'        // Jenkins credential ID — add this in Jenkins → Credentials
         HELM_RELEASE     = 'rocketchat'
         HELM_CHART_PATH  = './helm'
+        K8S_NAMESPACE    = 'default'
     }
 
     options {
@@ -21,8 +22,8 @@ pipeline {
         timestamps()
     }
 
-    stage('Clean Workspace') {
         steps {
+    stage('Clean Workspace') {
             cleanWs()
         }
     }
@@ -141,6 +142,71 @@ pipeline {
             }
         }
 
+        // ── 9. Bootstrap Cluster (one-time setup, idempotent) ─
+        stage('Bootstrap Cluster') {
+            when {
+                allOf {
+                    expression { env.IMAGES_PUSHED == 'true' }
+                    branch 'develop'
+                }
+            }
+            steps {
+                script {
+                    withCredentials([
+                        file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG'),
+                        usernamePassword(
+                            credentialsId: ACR_CREDENTIALS,
+                            usernameVariable: 'ACR_USER',
+                            passwordVariable: 'ACR_PASS'
+                        )
+                    ]) {
+                        // ── 9a. Fix duplicate default storage class ────────
+                        sh """
+                            echo "🔧 Patching storage class..."
+                            kubectl patch storageclass local-path \
+                                -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' \
+                                --ignore-not-found=true || true
+                            echo "✅ Storage class patched"
+                        """
+ 
+                        // ── 9b. Create ACR pull secret (skip if exists) ───
+                        sh """
+                            echo "🔐 Setting up ACR image pull secret..."
+                            kubectl create secret docker-registry acr-secret \
+                                --docker-server=${ACR_LOGIN_SERVER} \
+                                --docker-username=\$ACR_USER \
+                                --docker-password=\$ACR_PASS \
+                                --namespace=${K8S_NAMESPACE} \
+                                --dry-run=client -o yaml | kubectl apply -f -
+                            echo "✅ ACR pull secret ready"
+                        """
+ 
+                        // ── 9c. Wait for Longhorn to be ready ─────────────
+                        sh """
+                            echo "⏳ Checking Longhorn..."
+                            kubectl -n longhorn-system wait \
+                                --for=condition=ready pod \
+                                -l app=longhorn-manager \
+                                --timeout=120s || true
+                            echo "✅ Longhorn ready"
+                        """
+ 
+                        // ── 9d. Wait for nginx ingress to be ready ────────
+                        sh """
+                            echo "⏳ Checking Nginx Ingress..."
+                            kubectl -n ingress-nginx wait \
+                                --for=condition=ready pod \
+                                -l app.kubernetes.io/name=ingress-nginx \
+                                --timeout=120s || true
+                            echo "✅ Nginx Ingress ready"
+                        """
+ 
+                        echo "✅ Cluster bootstrap complete"
+                    }
+                }
+            }
+        }
+
         stage('Deploy with Helm') {
             when {
                 allOf {
@@ -163,6 +229,9 @@ pipeline {
                                 -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
                                 --set rocketchat.image.repository=${ACR_LOGIN_SERVER}/${IMAGE_NAME} \
                                 --set rocketchat.image.tag=${BUILD_NUMBER} \
+                                --set rocketchat.image.pullPolicy=Always \
+                                --set rocketchat.imagePullSecrets[0].name=acr-secret \
+                                --namespace ${K8S_NAMESPACE} \
                                 --wait \
                                 --timeout 5m
                         """
@@ -170,13 +239,39 @@ pipeline {
  
                         // Verify rollout
                         sh """
-                            kubectl rollout status deployment/${HELM_RELEASE}-rocketchat --timeout=3m
-                            kubectl get pods -l app=rocketchat
+                            echo "🔍 Verifying rollout..."
+                            kubectl rollout status deployment/${HELM_RELEASE}-rocketchat \
+                                --namespace=${K8S_NAMESPACE} \
+                                --timeout=3m
+                            echo ""
+                            echo "📦 Running pods:"
+                            kubectl get pods -n ${K8S_NAMESPACE} -l app=rocketchat
+                            echo ""
+                            echo "🌐 Ingress:"
+                            kubectl get ingress -n ${K8S_NAMESPACE}
                         """
                     }
                 }
             }
         }
+
+        // ── 11. Cleanup ───────────────────────────────────────
+        stage('Cleanup') {
+            when {
+                expression { env.IMAGES_PUSHED == 'true' }
+            }
+            steps {
+                script {
+                    [FULL_IMAGE, LATEST_IMAGE].each { image ->
+                        sh "docker rmi ${image} || true"
+                    }
+                    sh 'docker image prune -f'
+                    echo "✅ Local images cleaned up"
+                }
+            }
+        }
+ 
+    }
 
         post {
             success {
