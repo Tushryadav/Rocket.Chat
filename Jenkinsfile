@@ -9,6 +9,9 @@ pipeline {
         FULL_IMAGE       = "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${BUILD_NUMBER}"
         LATEST_IMAGE     = "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest"
         ACR_CREDENTIALS  = 'rocketchat.azurecr.io'
+        KUBECONFIG_CRED  = 'k8s-kubeconfig'        // Jenkins credential ID — add this in Jenkins → Credentials
+        HELM_RELEASE     = 'rocketchat'
+        HELM_CHART_PATH  = './helm'
     }
 
     options {
@@ -43,6 +46,14 @@ pipeline {
                             error "Required file not found: ${file}"
                         }
                     }
+                    // Validate Helm chart
+                    sh """
+                        helm lint ${HELM_CHART_PATH} \
+                            -f ${HELM_CHART_PATH}/values/values-db.yaml \
+                            -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
+                            -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml
+                    """
+                    echo "✅ Helm chart lint passed"
 
                 }
             }
@@ -130,43 +141,63 @@ pipeline {
             }
         }
 
-        stage('Cleanup') {
+        stage('Deploy with Helm') {
             when {
-                expression { env.IMAGES_PUSHED == 'true' }
+                allOf {
+                    expression { env.IMAGES_PUSHED == 'true' }
+                    branch 'main'    // only deploy from main branch
+                }
             }
             steps {
                 script {
-                    [FULL_IMAGE, LATEST_IMAGE].each { image ->
-                        sh "docker rmi ${image} || true"
+                    withCredentials([
+                        file(
+                            credentialsId: KUBECONFIG_CRED,
+                            variable: 'KUBECONFIG'
+                        )
+                    ]) {
+                        sh """
+                            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+                                -f ${HELM_CHART_PATH}/values/values-db.yaml \
+                                -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
+                                -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
+                                --set rocketchat.image.repository=${ACR_LOGIN_SERVER}/${IMAGE_NAME} \
+                                --set rocketchat.image.tag=${BUILD_NUMBER} \
+                                --wait \
+                                --timeout 5m
+                        """
+                        echo "✅ Helm deploy successful — release: ${HELM_RELEASE} image tag: ${BUILD_NUMBER}"
+ 
+                        // Verify rollout
+                        sh """
+                            kubectl rollout status deployment/${HELM_RELEASE}-rocketchat --timeout=3m
+                            kubectl get pods -l app=rocketchat
+                        """
                     }
-                    sh 'docker image prune -f'
-                    echo "✅ Local images cleaned up"
                 }
             }
         }
 
-    }
-
-    post {
-        success {
-            script {
-                echo """
-                ╔══════════════════════════════════════╗
-                ║         BUILD SUCCESSFUL ✅           ║
-                ╠══════════════════════════════════════╣
-                ║ Image : ${FULL_IMAGE}
-                ║ Latest: ${LATEST_IMAGE}
-                ║ Build : #${BUILD_NUMBER}
-                ║ Commit: ${GIT_COMMIT.take(7)}
-                ╚══════════════════════════════════════╝
-                """
+        post {
+            success {
+                script {
+                    echo """
+                    ╔══════════════════════════════════════╗
+                    ║         BUILD SUCCESSFUL ✅          ║
+                    ╠══════════════════════════════════════╣
+                    ║ Image : ${FULL_IMAGE}
+                    ║ Latest: ${LATEST_IMAGE}
+                    ║ Build : #${BUILD_NUMBER}
+                    ║ Commit: ${GIT_COMMIT.take(7)}
+                    ╚══════════════════════════════════════╝
+                    """
+                }
+            }
+            failure {
+                echo "❌ Build #${BUILD_NUMBER} failed. Check logs above."
+            }
+            always {
+                sh "docker logout ${ACR_LOGIN_SERVER} || true"
             }
         }
-        failure {
-            echo "❌ Build #${BUILD_NUMBER} failed. Check logs above."
-        }
-        always {
-            sh "docker logout ${ACR_LOGIN_SERVER} || true"
-        }
     }
-}
