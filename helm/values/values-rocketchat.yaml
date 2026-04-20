@@ -3,9 +3,11 @@ rocketchat:
   replicaCount: 1
   rootUrl: "http://rocketchat.local"
   image:
-    repository: registry.rocket.chat/rocketchat/rocket.chat
-    tag: "6.8.0"
-    pullPolicy: IfNotPresent
+    repository: rocketchat.azurecr.io/rocketchat-v0.1
+    tag: "latest"
+    pullPolicy: Always
+    imagePullSecrets:
+      - name: acr-secret
 
   ingress:
     enabled: true
