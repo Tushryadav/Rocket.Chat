@@ -145,7 +145,7 @@ pipeline {
             when {
                 allOf {
                     expression { env.IMAGES_PUSHED == 'true' }
-                    branch 'main'    // only deploy from main branch
+                    branch 'develop'    // only deploy from main branch
                 }
             }
             steps {
