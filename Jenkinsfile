@@ -3,12 +3,12 @@ pipeline {
 
     environment {
         ACR_NAME         = 'rocketchat'
-        ACR_LOGIN_SERVER = "rocketchat.azurecr.io"
+        ACR_LOGIN_SERVER = "asia-south2-docker.pkg.dev/project-d3f73645-327e-4f11-ba2/rocketchat"
         IMAGE_NAME       = 'rocketchat-v0.1'
         IMAGE_TAG        = "v0.0.1"
         FULL_IMAGE       = "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${BUILD_NUMBER}"
         LATEST_IMAGE     = "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest"
-        ACR_CREDENTIALS  = 'rocketchat.azurecr.io'
+        ACR_CREDENTIALS  = 'rocketchat'
         KUBECONFIG_CRED  = 'k8s-kubeconfig'        // Jenkins credential ID — add this in Jenkins → Credentials
         HELM_RELEASE     = 'rocketchat'
         HELM_CHART_PATH  = './helm'
