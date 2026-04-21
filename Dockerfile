@@ -1,5 +1,5 @@
 # Use official Rocket.Chat image (DO NOT rebuild app)
-FROM rocketchat/rocket.chat:6.8.0
+FROM rocketchat/rocket.chat:8.3.2
 
 # Switch to root to make controlled changes
 USER root
