@@ -58,6 +58,14 @@ pipeline {
             }
         }
 
+        stage('Verify Identity') {
+            steps {
+                sh '''
+                gcloud auth list
+                '''
+            }
+        }
+
         stage('Auth to Artifact Registry (Keyless)') {
             steps {
                 sh '''
