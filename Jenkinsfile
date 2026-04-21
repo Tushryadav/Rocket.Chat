@@ -138,7 +138,7 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
                         // ── 9a. Fix duplicate default storage class ────────
                         sh """
                             echo "🔧 Patching storage class..."
