@@ -1,11 +1,11 @@
 # Use official Rocket.Chat image (DO NOT rebuild app)
-FROM rocketchat/rocket.chat:8.3.2
+FROM rocketchat/rocket.chat:7.4.0
 
 # Switch to root to make controlled changes
 USER root
 
 # Install minimal required tools (no bloat)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk update && apk add --no-cache \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
