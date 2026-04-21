@@ -25,8 +25,8 @@ pipeline {
         timestamps()
     }
 
-        steps {
-    stage('Clean Workspace') {
+    steges {
+        stage('Clean Workspace') {
             cleanWs()
         }
     }
@@ -138,7 +138,7 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
                         // ── 9a. Fix duplicate default storage class ────────
                         sh """
                             echo "🔧 Patching storage class..."
@@ -193,26 +193,21 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([
-                        file(
-                            credentialsId: KUBECONFIG_CRED,
-                            variable: 'KUBECONFIG'
-                        )
-                    ]) {
+                     withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
                         sh """
                             helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-db.yaml \
                                 -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
                                 -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
-                                --set rocketchat.image.repository=${ACR_LOGIN_SERVER}/${IMAGE_NAME} \
+                                --set rocketchat.image.repository=${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME} \
                                 --set rocketchat.image.tag=${BUILD_NUMBER} \
                                 --set rocketchat.image.pullPolicy=Always \
-                                --set rocketchat.imagePullSecrets[0].name=acr-secret \
+                                --set rocketchat.imagePullSecrets[0].name=gar-secret \
                                 --namespace ${K8S_NAMESPACE} \
                                 --wait \
                                 --timeout 5m
                         """
-                        echo "✅ Helm deploy successful — release: ${HELM_RELEASE} image tag: ${BUILD_NUMBER}"
+                        echo "✅ Helm deploy successful — release: ${HELM_RELEASE}, tag: ${BUILD_NUMBER}"
  
                         // Verify rollout
                         sh """
@@ -250,26 +245,23 @@ pipeline {
  
     }
 
-        post {
-            success {
-                script {
-                    echo """
-                    ╔══════════════════════════════════════╗
-                    ║         BUILD SUCCESSFUL ✅          ║
-                    ╠══════════════════════════════════════╣
-                    ║ Image : ${FULL_IMAGE}
-                    ║ Latest: ${LATEST_IMAGE}
-                    ║ Build : #${BUILD_NUMBER}
-                    ║ Commit: ${GIT_COMMIT.take(7)}
-                    ╚══════════════════════════════════════╝
-                    """
-                }
-            }
-            failure {
-                echo "❌ Build #${BUILD_NUMBER} failed. Check logs above."
-            }
-            always {
-                sh "docker logout ${ACR_LOGIN_SERVER} || true"
-            }
+post {
+     success {
+            echo """
+            ╔══════════════════════════════════════╗
+            ║         BUILD SUCCESSFUL ✅          ║
+            ╠══════════════════════════════════════╣
+            ║ Image : ${FULL_IMAGE}
+            ║ Latest: ${LATEST_IMAGE}
+            ║ Build : #${BUILD_NUMBER}
+            ╚══════════════════════════════════════╝
+            """
+        }
+        failure {
+            echo "❌ Build #${BUILD_NUMBER} failed. Check logs above."
+        }
+        always {
+            sh "docker logout ${GAR_HOSTNAME} || true"
         }
     }
+}
