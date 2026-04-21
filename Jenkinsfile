@@ -2,14 +2,17 @@ pipeline {
     agent any
 
     environment {
-        ACR_NAME         = 'rocketchat'
-        ACR_LOGIN_SERVER = "asia-south2-docker.pkg.dev/project-d3f73645-327e-4f11-ba2/rocketchat"
+        REGION           = 'asia-south2'                          // e.g. us-central1, asia-south1
+        PROJECT_ID       = 'your-gcp-project-id'                  // GCP project ID
+        REPOSITORY       = 'rocketchat'                           // GAR repository name
+        GAR_HOSTNAME     = "${REGION}-docker.pkg.dev"
+        
         IMAGE_NAME       = 'rocketchat-v0.1'
-        IMAGE_TAG        = "v0.0.1"
-        FULL_IMAGE       = "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${BUILD_NUMBER}"
-        LATEST_IMAGE     = "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest"
-        ACR_CREDENTIALS  = 'rocketchat'
-        KUBECONFIG_CRED  = 'k8s-kubeconfig'        // Jenkins credential ID — add this in Jenkins → Credentials
+        FULL_IMAGE       = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
+        LATEST_IMAGE     = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
+
+        // ── Kubernetes / Helm ─────────────────────────────────
+        KUBECONFIG_CRED  = 'k8s-kubeconfig'
         HELM_RELEASE     = 'rocketchat'
         HELM_CHART_PATH  = './helm'
         K8S_NAMESPACE    = 'default'
@@ -60,20 +63,13 @@ pipeline {
             }
         }
 
-        stage('Login to ACR') {
+        stage('Auth to Artifact Registry (Keyless)') {
             steps {
-                script {
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: ACR_CREDENTIALS,
-                            usernameVariable: 'ACR_USER',
-                            passwordVariable: 'ACR_PASS'
-                        )
-                    ]) {
-                        sh "echo \$ACR_PASS | docker login ${ACR_LOGIN_SERVER} --username \$ACR_USER --password-stdin"
-                        echo "Logged into ${ACR_LOGIN_SERVER}"
-                    }
-                }
+                sh '''
+                    echo "Using VM Service Account..."
+                    gcloud auth list
+                    gcloud auth configure-docker ${GAR_HOSTNAME} -q
+                '''
             }
         }
 
@@ -122,22 +118,12 @@ pipeline {
             }
         }
 
-        stage('Push to ACR') {
+        stage('Push Image') {
             steps {
                 script {
-                    try {
-                        [FULL_IMAGE, LATEST_IMAGE].each { image ->
-                            sh "docker push ${image}"
-                            echo "✅ Pushed: ${image}"
-                        }
-
-                        // Only set if ALL pushes succeed
-                        env.IMAGES_PUSHED = "true"
-
-                    } catch (err) {
-                        env.IMAGES_PUSHED = "false"
-                        error "❌ Image push failed"
-                    }
+                    sh "docker push ${FULL_IMAGE}"
+                    sh "docker push ${LATEST_IMAGE}"
+                    env.IMAGES_PUSHED = 'true'
                 }
             }
         }
@@ -152,14 +138,7 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([
-                        file(credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG'),
-                        usernamePassword(
-                            credentialsId: ACR_CREDENTIALS,
-                            usernameVariable: 'ACR_USER',
-                            passwordVariable: 'ACR_PASS'
-                        )
-                    ]) {
+                    withCredentials([credentialsId: KUBECONFIG_CRED, variable: 'KUBECONFIG')]) {
                         // ── 9a. Fix duplicate default storage class ────────
                         sh """
                             echo "🔧 Patching storage class..."
@@ -171,16 +150,14 @@ pipeline {
  
                         // ── 9b. Create ACR pull secret (skip if exists) ───
                         sh """
-                            echo "🔐 Setting up ACR image pull secret..."
-                            kubectl create secret docker-registry acr-secret \
-                                --docker-server=${ACR_LOGIN_SERVER} \
-                                --docker-username=\$ACR_USER \
-                                --docker-password=\$ACR_PASS \
+                            echo "🔐 Creating GAR image-pull secret..."
+                            kubectl create secret docker-registry gar-secret \
+                                --docker-server=${GAR_HOSTNAME} \
+                                --docker-username=oauth2accesstoken \
+                                --docker-password=\$(gcloud auth print-access-token) \
                                 --namespace=${K8S_NAMESPACE} \
                                 --dry-run=client -o yaml | kubectl apply -f -
-                            echo "✅ ACR pull secret ready"
                         """
- 
                         // ── 9c. Wait for Longhorn to be ready ─────────────
                         sh """
                             echo "⏳ Checking Longhorn..."
