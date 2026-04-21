@@ -137,12 +137,16 @@ pipeline {
                         """
                         sh """
                             echo "🔐 Creating GAR image-pull secret..."
+                            TOKEN=\$(gcloud auth print-access-token)
                             kubectl create secret docker-registry gar-secret \
                                 --docker-server=${GAR_HOSTNAME} \
                                 --docker-username=oauth2accesstoken \
-                                --docker-password=\$(gcloud auth print-access-token) \
+                                --docker-password=\$TOKEN \
                                 --namespace=${K8S_NAMESPACE} \
-                                --dry-run=client -o yaml | kubectl apply -f -
+                                --dry-run=client -o yaml > /tmp/gar-secret.yaml
+                            kubectl apply --validate=false -f /tmp/gar-secret.yaml
+                            rm /tmp/gar-secret.yaml
+                            echo "✅ GAR pull secret ready"
                         """
                         sh """
                             echo "⏳ Checking Longhorn..."
