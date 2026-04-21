@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         REGION           = 'asia-south2'
-        PROJECT_ID       = 'your-gcp-project-id'
+        PROJECT_ID       = 'd3f73645-327e-4f11-ba2'
         REPOSITORY       = 'rocketchat'
         GAR_HOSTNAME     = "${REGION}-docker.pkg.dev"
         
