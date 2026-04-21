@@ -26,7 +26,9 @@ pipeline {
     }
 
     steges {
+        
         stage('Clean Workspace') {
+            steps {
             cleanWs()
         }
     }
@@ -245,23 +247,23 @@ pipeline {
  
     }
 
-post {
-     success {
-            echo """
-            ╔══════════════════════════════════════╗
-            ║         BUILD SUCCESSFUL ✅          ║
-            ╠══════════════════════════════════════╣
-            ║ Image : ${FULL_IMAGE}
-            ║ Latest: ${LATEST_IMAGE}
-            ║ Build : #${BUILD_NUMBER}
-            ╚══════════════════════════════════════╝
-            """
-        }
-        failure {
-            echo "❌ Build #${BUILD_NUMBER} failed. Check logs above."
-        }
-        always {
-            sh "docker logout ${GAR_HOSTNAME} || true"
+    post {
+         success {
+                echo """
+                ╔══════════════════════════════════════╗
+                ║         BUILD SUCCESSFUL ✅          ║
+                ╠══════════════════════════════════════╣
+                ║ Image : ${FULL_IMAGE}
+                ║ Latest: ${LATEST_IMAGE}
+                ║ Build : #${BUILD_NUMBER}
+                ╚══════════════════════════════════════╝
+                """
+            }
+            failure {
+                echo "❌ Build #${BUILD_NUMBER} failed. Check logs above."
+            }
+            always {
+                sh "docker logout ${GAR_HOSTNAME} || true"
+            }
         }
     }
-}
