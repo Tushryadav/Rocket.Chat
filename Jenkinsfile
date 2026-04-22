@@ -236,4 +236,3 @@ pipeline {
             sh "docker logout ${GAR_HOSTNAME} || true"
         }
     }
-}
