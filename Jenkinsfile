@@ -5,24 +5,23 @@ pipeline {
         booleanParam(
             name: 'RUN_ONE_TIME_SETUP',
             defaultValue: false,
-            description: '⚠️ Run ONE-TIME VM setup (Phase 2+3: packages, k3s, helm, docker, gcloud). Only needed on first-time VM provisioning.'
+            description: '⚠️ Run ONE-TIME VM setup only. Do NOT check this on normal builds.'
         )
     }
 
     environment {
-        REGION           = 'asia-south2'
-        PROJECT_ID       = 'project-d3f73645-327e-4f11-ba2'
-        REPOSITORY       = 'rocketchat'
-        GAR_HOSTNAME     = "${REGION}-docker.pkg.dev"
-        
-        IMAGE_NAME       = 'rocketchat-v0.1'
-        FULL_IMAGE       = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
-        LATEST_IMAGE     = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
+        REGION          = 'asia-south2'
+        PROJECT_ID      = 'project-d3f73645-327e-4f11-ba2'
+        REPOSITORY      = 'rocketchat'
+        GAR_HOSTNAME    = "${REGION}-docker.pkg.dev"
 
-        KUBECONFIG_CRED  = 'k8s-kubeconfig'
-        HELM_RELEASE     = 'rocketchat'
-        HELM_CHART_PATH  = './helm'
-        K8S_NAMESPACE    = 'default'
+        IMAGE_NAME      = 'rocketchat-v0.1'
+        FULL_IMAGE      = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
+        LATEST_IMAGE    = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
+
+        HELM_RELEASE    = 'rocketchat'
+        HELM_CHART_PATH = './helm'
+        K8S_NAMESPACE   = 'default'
     }
 
     options {
@@ -34,28 +33,25 @@ pipeline {
 
     stages {
 
-        // ─────────────────────────────────────────────────────────────────
-        // ONE-TIME SETUP  (skipped on every normal build)
-        // Trigger manually: Build with Parameters → check RUN_ONE_TIME_SETUP
-        // ─────────────────────────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════
+        // BLOCK A — ONE-TIME SETUP  (only when param is checked)
+        // ══════════════════════════════════════════════════════
 
         stage('One-Time Setup: System Packages') {
             when { expression { params.RUN_ONE_TIME_SETUP == true } }
             steps {
                 sh '''
                     echo "📦 Phase 2 — System Preparation"
-                    sudo apt update && sudo apt upgrade -y
 
-                    # Longhorn storage requirements
+                    # Idempotent — safe to re-run
+                    sudo apt update && sudo apt upgrade -y
                     sudo apt install -y curl wget git open-iscsi nfs-common
 
-                    # Enable iSCSI (required by Longhorn)
                     sudo systemctl enable iscsid
                     sudo systemctl start iscsid
-
-                    # Verify
                     sudo systemctl status iscsid --no-pager
-                    echo "✅ System packages installed"
+
+                    echo "✅ System packages ready"
                 '''
             }
         }
@@ -64,20 +60,22 @@ pipeline {
             when { expression { params.RUN_ONE_TIME_SETUP == true } }
             steps {
                 sh '''
-                    echo "☸️  Phase 3 — Install k3s (without Traefik)"
-                    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
+                    echo "☸️  Phase 3 — Install k3s"
 
-                    # Set up kubeconfig for current user
-                    sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+                    # Guard — skip if already installed
+                    if command -v k3s &>/dev/null; then
+                        echo "⏭️  k3s already installed, skipping"
+                        k3s --version
+                    else
+                        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
+                        sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+                        grep -qxF 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' ~/.bashrc \
+                            || echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> ~/.bashrc
+                        echo "✅ k3s installed"
+                    fi
+
                     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
-                    # Persist for all future shells
-                    grep -qxF 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' ~/.bashrc \
-                        || echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> ~/.bashrc
-
-                    # Verify node is Ready
                     kubectl get nodes
-                    echo "✅ k3s installed"
                 '''
             }
         }
@@ -86,10 +84,15 @@ pipeline {
             when { expression { params.RUN_ONE_TIME_SETUP == true } }
             steps {
                 sh '''
-                    echo "⎈  Installing Helm 3"
-                    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-                    helm version
-                    echo "✅ Helm installed"
+                    if command -v helm &>/dev/null; then
+                        echo "⏭️  Helm already installed"
+                        helm version
+                    else
+                        echo "⎈  Installing Helm 3"
+                        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+                        helm version
+                        echo "✅ Helm installed"
+                    fi
                 '''
             }
         }
@@ -98,72 +101,73 @@ pipeline {
             when { expression { params.RUN_ONE_TIME_SETUP == true } }
             steps {
                 sh '''
-                    echo "🐳 Installing Docker"
-                    curl -fsSL https://get.docker.com | sh
-                    sudo usermod -aG docker jenkins
-                    sudo systemctl enable docker
-                    sudo systemctl start docker
-                    docker --version
-                    sudo systemctl restart docker
-                    sudo systemctl restart jenkins
-                    echo "✅ Docker installed — NOTE: Jenkins restarted, pipeline will abort here."
-                    echo "    Re-run this job (without RUN_ONE_TIME_SETUP) once Jenkins is back up."
+                    if command -v docker &>/dev/null; then
+                        echo "⏭️  Docker already installed"
+                        docker --version
+                    else
+                        echo "🐳 Installing Docker"
+                        curl -fsSL https://get.docker.com | sh
+                        sudo usermod -aG docker jenkins
+                        sudo systemctl enable docker
+                        sudo systemctl start docker
+                        docker --version
+                        echo "✅ Docker installed"
+                        echo "⚠️  Restarting Jenkins — pipeline will die here."
+                        echo "    Wait 30s then re-run WITHOUT RUN_ONE_TIME_SETUP checked."
+                        sudo systemctl restart docker
+                        sudo systemctl restart jenkins
+                    fi
                 '''
             }
         }
 
-        stage('One-Time Setup: Configure gcloud for Jenkins') {
+        stage('One-Time Setup: Configure gcloud') {
             when { expression { params.RUN_ONE_TIME_SETUP == true } }
             steps {
-                // ✅ Key file injected securely, never touches disk permanently
+                // SA key stored in Jenkins credentials — never interactive
                 withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'SA_KEY')]) {
                     sh '''
-                        echo "☁️  Activating GCP Service Account..."
-        
-                        # Authenticate as service account (non-interactive)
+                        echo "☁️  Activating GCP Service Account for jenkins user"
+
                         sudo -u jenkins gcloud auth activate-service-account \
                             --key-file=$SA_KEY
-        
-                        # Configure Docker for Artifact Registry
+
                         sudo -u jenkins gcloud auth configure-docker \
                             asia-south2-docker.pkg.dev -q
-        
-                        # Set default project
+
                         sudo -u jenkins gcloud config set project \
                             project-d3f73645-327e-4f11-ba2
-        
+
                         # Verify
                         sudo -u jenkins gcloud auth list
                         sudo -u jenkins gcloud config list
-        
+
                         echo "✅ gcloud configured for jenkins user"
                     '''
                 }
             }
         }
 
-    stages {                                          // ✅ Fix 1: removed duplicate mistyped `steges` block
+        // ══════════════════════════════════════════════════════
+        // BLOCK B — NORMAL CI/CD  (every build, setup skipped)
+        // ══════════════════════════════════════════════════════
 
         stage('Clean Workspace') {
-            steps {                                   // ✅ Fix 2: added missing `steps {}` wrapper
-                cleanWs()
-            }
+            when { expression { params.RUN_ONE_TIME_SETUP == false } }
+            steps { cleanWs() }
         }
 
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            when { expression { params.RUN_ONE_TIME_SETUP == false } }
+            steps { checkout scm }
         }
 
         stage('Validate') {
+            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
                 script {
-                    def requiredFiles = ['Dockerfile', 'docker-compose.yml']
-                    requiredFiles.each { file ->
-                        if (!fileExists(file)) {
-                            error "Required file not found: ${file}"
-                        }
+                    ['Dockerfile', 'docker-compose.yml'].each { f ->
+                        if (!fileExists(f)) error "Required file missing: ${f}"
                     }
                     sh """
                         helm lint ${HELM_CHART_PATH} \
@@ -171,98 +175,84 @@ pipeline {
                             -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
                             -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml
                     """
-                    echo "✅ Helm chart lint passed"
+                    echo "✅ Helm lint passed"
                 }
             }
         }
 
-        stage('Verify Identity') {
+        stage('Auth to Artifact Registry') {
+            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
-                sh '''
-                gcloud auth list
-                '''
-            }
-        }
-
-        stage('Auth to Artifact Registry (Keyless)') {
-            steps {
-                sh '''
-                    echo "Using VM Service Account..."
+                sh """
                     gcloud auth list
                     gcloud auth configure-docker ${GAR_HOSTNAME} -q
-                '''
+                    echo "✅ Docker authenticated to GAR"
+                """
             }
         }
 
         stage('Debug Workspace') {
+            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
-                sh 'pwd'
-                sh 'ls -la'
-                sh 'cat .dockerignore || echo "No dockerignore found"'
-                sh 'find . -name "*.pem" || true'
+                sh '''
+                    pwd && ls -la
+                    cat .dockerignore || echo "No .dockerignore found"
+                    find . -name "*.pem" || true
+                '''
             }
         }
 
         stage('Build Image') {
+            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
                 script {
-                    def shortCommit = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : "unknown"
+                    def shortCommit = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'unknown'
                     sh """
-                    docker build \
-                      -t ${FULL_IMAGE} \
-                      -t ${LATEST_IMAGE} \
-                      --label build-number=${BUILD_NUMBER} \
-                      --label git-commit=${shortCommit} \
-                      --label git-branch=${GIT_BRANCH} \
-                      --label build-date=\$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-                      .
+                        docker build \
+                            -t ${FULL_IMAGE} \
+                            -t ${LATEST_IMAGE} \
+                            --label build-number=${BUILD_NUMBER} \
+                            --label git-commit=${shortCommit} \
+                            --label git-branch=${GIT_BRANCH} \
+                            --label build-date=\$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+                            .
                     """
-                    echo "✅ Image Built: ${FULL_IMAGE}"
+                    echo "✅ Image built: ${FULL_IMAGE}"
                 }
             }
         }
 
-        // stage('Scan Image with Trivy') {
-        //     steps {
-        //         script {
-        //             echo "🔍 Scanning Docker image with Trivy..."
-        //             sh """
-        //             trivy image --exit-code 1 --severity HIGH,CRITICAL ${FULL_IMAGE}
-        //             """
-        //             echo "✅ Trivy scan passed (no HIGH/CRITICAL vulnerabilities)"
-        //         }
-        //     }
-        // }
-
-        stage('Configure GCP Auth (Keyless)') {
+        stage('Scan Image (Trivy)') {
+            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
-                sh '''
-                gcloud auth configure-docker ${REGISTRY} --quiet
-                '''
-            }
-        }
-
-        stage('Tag Image') {
-            steps {
-                sh '''
-                docker tag ${IMAGE}:${TAG} \
-                ${REGISTRY}/${PROJECT_ID}/${REPO}/${IMAGE}:${TAG}
-                '''
+                sh """
+                    echo "🔍 Scanning for HIGH/CRITICAL CVEs..."
+                    trivy image \
+                        --exit-code 1 \
+                        --severity HIGH,CRITICAL \
+                        --ignore-unfixed \
+                        ${FULL_IMAGE}
+                    echo "✅ Trivy scan passed"
+                """
             }
         }
 
         stage('Push to Artifact Registry') {
+            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
-                sh '''
-                docker push \
-                ${REGISTRY}/${PROJECT_ID}/${REPO}/${IMAGE}:${TAG}
-                '''
+                script {
+                    sh "docker push ${FULL_IMAGE}"
+                    sh "docker push ${LATEST_IMAGE}"
+                    echo "✅ Images pushed to GAR"
+                    env.IMAGES_PUSHED = 'true'      // ✅ gates downstream stages
+                }
             }
         }
-    
+
         stage('Bootstrap Cluster') {
             when {
                 allOf {
+                    expression { params.RUN_ONE_TIME_SETUP == false }
                     expression { env.IMAGES_PUSHED == 'true' }
                     expression { env.GIT_BRANCH == 'origin/develop' }
                 }
@@ -270,6 +260,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
+
                         sh """
                             echo "🔧 Patching storage class..."
                             kubectl patch storageclass local-path \
@@ -277,35 +268,40 @@ pipeline {
                                 --ignore-not-found=true || true
                             echo "✅ Storage class patched"
                         """
+
+                        // ✅ Token masked, no temp file on disk
+                        wrap([$class: 'MaskPasswordsBuildWrapper']) {
+                            sh """
+                                echo "🔐 Creating GAR image-pull secret..."
+                                TOKEN=\$(gcloud auth print-access-token)
+                                kubectl create secret docker-registry gar-secret \
+                                    --docker-server=${GAR_HOSTNAME} \
+                                    --docker-username=oauth2accesstoken \
+                                    --docker-password=\$TOKEN \
+                                    --namespace=${K8S_NAMESPACE} \
+                                    --dry-run=client -o yaml | kubectl apply -f -
+                                echo "✅ GAR pull secret ready"
+                            """
+                        }
+
                         sh """
-                            echo "🔐 Creating GAR image-pull secret..."
-                            TOKEN=\$(gcloud auth print-access-token)
-                            kubectl create secret docker-registry gar-secret \
-                                --docker-server=${GAR_HOSTNAME} \
-                                --docker-username=oauth2accesstoken \
-                                --docker-password=\$TOKEN \
-                                --namespace=${K8S_NAMESPACE} \
-                                --dry-run=client -o yaml > /tmp/gar-secret.yaml
-                            kubectl apply --validate=false -f /tmp/gar-secret.yaml
-                            rm /tmp/gar-secret.yaml
-                            echo "✅ GAR pull secret ready"
-                        """
-                        sh """
-                            echo "⏳ Checking Longhorn..."
+                            echo "⏳ Waiting for Longhorn..."
                             kubectl -n longhorn-system wait \
                                 --for=condition=ready pod \
                                 -l app=longhorn-manager \
                                 --timeout=120s || true
                             echo "✅ Longhorn ready"
                         """
+
                         sh """
-                            echo "⏳ Checking Nginx Ingress..."
+                            echo "⏳ Waiting for Nginx Ingress..."
                             kubectl -n ingress-nginx wait \
                                 --for=condition=ready pod \
                                 -l app.kubernetes.io/name=ingress-nginx \
                                 --timeout=120s || true
                             echo "✅ Nginx Ingress ready"
                         """
+
                         echo "✅ Cluster bootstrap complete"
                     }
                 }
@@ -315,9 +311,9 @@ pipeline {
         stage('Deploy with Helm') {
             when {
                 allOf {
+                    expression { params.RUN_ONE_TIME_SETUP == false }
                     expression { env.IMAGES_PUSHED == 'true' }
                     expression { env.GIT_BRANCH == 'origin/develop' }
-                    branch 'develop'
                 }
             }
             steps {
@@ -333,18 +329,17 @@ pipeline {
                                 --set rocketchat.image.pullPolicy=Always \
                                 --set rocketchat.imagePullSecrets[0].name=gar-secret \
                                 --namespace ${K8S_NAMESPACE} \
+                                --atomic \
+                                --cleanup-on-fail \
                                 --wait \
                                 --timeout 5m
                         """
-                        echo "✅ Helm deploy successful — release: ${HELM_RELEASE}, tag: ${BUILD_NUMBER}"
+                        echo "✅ Helm deploy successful"
+
                         sh """
-                            echo "🔍 Verifying rollout..."
                             kubectl rollout status deployment/${HELM_RELEASE}-rocketchat \
-                                --namespace=${K8S_NAMESPACE} \
-                                --timeout=3m
-                            echo "📦 Running pods:"
+                                --namespace=${K8S_NAMESPACE} --timeout=3m
                             kubectl get pods -n ${K8S_NAMESPACE} -l app=rocketchat
-                            echo "🌐 Ingress:"
                             kubectl get ingress -n ${K8S_NAMESPACE}
                         """
                     }
@@ -354,7 +349,10 @@ pipeline {
 
         stage('Cleanup') {
             when {
-                expression { env.IMAGES_PUSHED == 'true' }
+                allOf {
+                    expression { params.RUN_ONE_TIME_SETUP == false }
+                    expression { env.IMAGES_PUSHED == 'true' }
+                }
             }
             steps {
                 script {
@@ -367,19 +365,25 @@ pipeline {
             }
         }
 
-    }                                                 // ✅ end of stages
+    } // end stages
 
-    post {                                            // ✅ Fix 3: moved post{} to pipeline level (was inside stages)
+    post {
         success {
-            echo """
-            ╔══════════════════════════════════════╗
-            ║         BUILD SUCCESSFUL ✅          ║
-            ╠══════════════════════════════════════╣
-            ║ Image : ${FULL_IMAGE}
-            ║ Latest: ${LATEST_IMAGE}
-            ║ Build : #${BUILD_NUMBER}
-            ╚══════════════════════════════════════╝
-            """
+            script {
+                if (params.RUN_ONE_TIME_SETUP) {
+                    echo "✅ One-time setup complete. Now run the pipeline normally."
+                } else {
+                    echo """
+                    ╔══════════════════════════════════════╗
+                    ║        BUILD SUCCESSFUL ✅           ║
+                    ╠══════════════════════════════════════╣
+                    ║ Image : ${FULL_IMAGE}
+                    ║ Latest: ${LATEST_IMAGE}
+                    ║ Build : #${BUILD_NUMBER}
+                    ╚══════════════════════════════════════╝
+                    """
+                }
+            }
         }
         failure {
             echo "❌ Build #${BUILD_NUMBER} failed. Check logs above."
