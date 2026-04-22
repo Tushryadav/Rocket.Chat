@@ -134,7 +134,7 @@ pipeline {
                                     --docker-username=oauth2accesstoken \
                                     --docker-password=\$TOKEN \
                                     --namespace=${K8S_NAMESPACE} \
-                                    --dry-run=client -o yaml | kubectl apply -f -
+                                    --dry-run=client -o yaml | kubectl apply -f - --validate=false
                                 echo "✅ GAR pull secret ready"
                             """
                         }
