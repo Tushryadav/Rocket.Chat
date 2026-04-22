@@ -50,7 +50,6 @@ pipeline {
         }
 
         stage('Auth to Artifact Registry') {
-            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
                 sh """
                     gcloud auth list
@@ -61,7 +60,6 @@ pipeline {
         }
 
         stage('Build Image') {
-            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
                 script {
                     def shortCommit = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'unknown'
@@ -96,7 +94,6 @@ pipeline {
         // }
 
         stage('Push to Artifact Registry') {
-            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
                 script {
                     sh "docker push ${FULL_IMAGE}"
@@ -169,7 +166,6 @@ pipeline {
         stage('Deploy with Helm') {
             when {
                 allOf {
-                    expression { env.IMAGES_PUSHED == 'true' }
                     expression { env.GIT_BRANCH?.contains('develop') }
                 }
             }
@@ -205,11 +201,6 @@ pipeline {
         }
 
         stage('Cleanup') {
-            when {
-                allOf {
-                    expression { env.IMAGES_PUSHED == 'true' }
-                }
-            }
             steps {
                 script {
                     [FULL_IMAGE, LATEST_IMAGE].each { image ->
