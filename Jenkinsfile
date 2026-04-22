@@ -1,14 +1,6 @@
 pipeline {
     agent any
 
-    parameters {
-        booleanParam(
-            name: 'RUN_ONE_TIME_SETUP',
-            defaultValue: true,
-            description: '⚠️ Run ONE-TIME VM setup only. Do NOT check this on normal builds.'
-        )
-    }
-
     environment {
         REGION          = 'asia-south2'
         PROJECT_ID      = 'project-d3f73645-327e-4f11-ba2'
@@ -32,140 +24,15 @@ pipeline {
     }
 
     stages {
-
-        // ══════════════════════════════════════════════════════
-        // BLOCK A — ONE-TIME SETUP  (only when param is checked)
-        // ══════════════════════════════════════════════════════
-
-        stage('One-Time Setup: System Packages') {
-            when { expression { params.RUN_ONE_TIME_SETUP == true } }
-            steps {
-                sh '''
-                    echo "📦 Phase 2 — System Preparation"
-
-                    # Idempotent — safe to re-run
-                    sudo apt update && sudo apt upgrade -y
-                    sudo apt install -y curl wget git open-iscsi nfs-common
-
-                    sudo systemctl enable iscsid
-                    sudo systemctl start iscsid
-                    sudo systemctl status iscsid --no-pager
-
-                    echo "✅ System packages ready"
-                '''
-            }
-        }
-
-        stage('One-Time Setup: Install k3s') {
-            when { expression { params.RUN_ONE_TIME_SETUP == true } }
-            steps {
-                sh '''
-                    echo "☸️  Phase 3 — Install k3s"
-
-                    # Guard — skip if already installed
-                    if command -v k3s &>/dev/null; then
-                        echo "⏭️  k3s already installed, skipping"
-                        k3s --version
-                    else
-                        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
-                        sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-                        grep -qxF 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' ~/.bashrc \
-                            || echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> ~/.bashrc
-                        echo "✅ k3s installed"
-                    fi
-
-                    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-                    kubectl get nodes
-                '''
-            }
-        }
-
-        stage('One-Time Setup: Install Helm') {
-            when { expression { params.RUN_ONE_TIME_SETUP == true } }
-            steps {
-                sh '''
-                    if command -v helm &>/dev/null; then
-                        echo "⏭️  Helm already installed"
-                        helm version
-                    else
-                        echo "⎈  Installing Helm 3"
-                        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-                        helm version
-                        echo "✅ Helm installed"
-                    fi
-                '''
-            }
-        }
-
-        stage('One-Time Setup: Install Docker') {
-            when { expression { params.RUN_ONE_TIME_SETUP == true } }
-            steps {
-                sh '''
-                    if command -v docker &>/dev/null; then
-                        echo "⏭️  Docker already installed"
-                        docker --version
-                    else
-                        echo "🐳 Installing Docker"
-                        curl -fsSL https://get.docker.com | sh
-                        sudo usermod -aG docker jenkins
-                        sudo systemctl enable docker
-                        sudo systemctl start docker
-                        docker --version
-                        echo "✅ Docker installed"
-                        echo "⚠️  Restarting Jenkins — pipeline will die here."
-                        echo "    Wait 30s then re-run WITHOUT RUN_ONE_TIME_SETUP checked."
-                        sudo systemctl restart docker
-                        sudo systemctl restart jenkins
-                    fi
-                '''
-            }
-        }
-
-        stage('One-Time Setup: Configure gcloud') {
-            when { expression { params.RUN_ONE_TIME_SETUP == true } }
-            steps {
-                // SA key stored in Jenkins credentials — never interactive
-                withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'SA_KEY')]) {
-                    sh '''
-                        echo "☁️  Verifying VM metadata identity..."
-            
-                        # VM SA is auto-detected — just verify it works
-                        gcloud auth list
-            
-                        # Configure docker to use VM identity for GAR
-                        sudo -u jenkins gcloud auth configure-docker \
-                            asia-south2-docker.pkg.dev -q
-            
-                        # Set default project
-                        sudo -u jenkins gcloud config set project \
-                            project-d3f73645-327e-4f11-ba2
-            
-                        # Verify
-                        sudo -u jenkins gcloud auth list
-                        sudo -u jenkins gcloud config list
-            
-                        echo "✅ Keyless gcloud configured — using VM Service Account"
-                    '''
-                }
-            }
-        }
-
-        // ══════════════════════════════════════════════════════
-        // BLOCK B — NORMAL CI/CD  (every build, setup skipped)
-        // ══════════════════════════════════════════════════════
-
         stage('Clean Workspace') {
-            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps { cleanWs() }
         }
 
         stage('Checkout') {
-            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps { checkout scm }
         }
 
         stage('Validate') {
-            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
                 script {
                     ['Dockerfile', 'docker-compose.yml'].each { f ->
@@ -190,17 +57,6 @@ pipeline {
                     gcloud auth configure-docker ${GAR_HOSTNAME} -q
                     echo "✅ Docker authenticated to GAR"
                 """
-            }
-        }
-
-        stage('Debug Workspace') {
-            when { expression { params.RUN_ONE_TIME_SETUP == false } }
-            steps {
-                sh '''
-                    pwd && ls -la
-                    cat .dockerignore || echo "No .dockerignore found"
-                    find . -name "*.pem" || true
-                '''
             }
         }
 
@@ -253,7 +109,6 @@ pipeline {
         stage('Bootstrap Cluster') {
             when {
                 allOf {
-                    expression { params.RUN_ONE_TIME_SETUP == false }
                     expression { env.GIT_BRANCH?.contains('develop') }
                 }
             }
@@ -314,7 +169,6 @@ pipeline {
         stage('Deploy with Helm') {
             when {
                 allOf {
-                    expression { params.RUN_ONE_TIME_SETUP == false }
                     expression { env.IMAGES_PUSHED == 'true' }
                     expression { env.GIT_BRANCH?.contains('develop') }
                 }
@@ -353,7 +207,6 @@ pipeline {
         stage('Cleanup') {
             when {
                 allOf {
-                    expression { params.RUN_ONE_TIME_SETUP == false }
                     expression { env.IMAGES_PUSHED == 'true' }
                 }
             }
@@ -372,10 +225,7 @@ pipeline {
 
     post {
         success {
-            script {
-                if (params.RUN_ONE_TIME_SETUP) {
-                    echo "✅ One-time setup complete. Now run the pipeline normally."
-                } else {
+            script { 
                     echo """
                     ╔══════════════════════════════════════╗
                     ║        BUILD SUCCESSFUL ✅           ║
