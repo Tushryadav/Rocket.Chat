@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        booleanParam(
+            name: 'RUN_ONE_TIME_SETUP',
+            defaultValue: false,
+            description: '⚠️ Run ONE-TIME VM setup (Phase 2+3: packages, k3s, helm, docker, gcloud). Only needed on first-time VM provisioning.'
+        )
+    }
+
     environment {
         REGION           = 'asia-south2'
         PROJECT_ID       = 'project-d3f73645-327e-4f11-ba2'
@@ -23,6 +31,116 @@ pipeline {
         disableConcurrentBuilds()
         timestamps()
     }
+
+    stages {
+
+        // ─────────────────────────────────────────────────────────────────
+        // ONE-TIME SETUP  (skipped on every normal build)
+        // Trigger manually: Build with Parameters → check RUN_ONE_TIME_SETUP
+        // ─────────────────────────────────────────────────────────────────
+
+        stage('One-Time Setup: System Packages') {
+            when { expression { params.RUN_ONE_TIME_SETUP == true } }
+            steps {
+                sh '''
+                    echo "📦 Phase 2 — System Preparation"
+                    sudo apt update && sudo apt upgrade -y
+
+                    # Longhorn storage requirements
+                    sudo apt install -y curl wget git open-iscsi nfs-common
+
+                    # Enable iSCSI (required by Longhorn)
+                    sudo systemctl enable iscsid
+                    sudo systemctl start iscsid
+
+                    # Verify
+                    sudo systemctl status iscsid --no-pager
+                    echo "✅ System packages installed"
+                '''
+            }
+        }
+
+        stage('One-Time Setup: Install k3s') {
+            when { expression { params.RUN_ONE_TIME_SETUP == true } }
+            steps {
+                sh '''
+                    echo "☸️  Phase 3 — Install k3s (without Traefik)"
+                    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
+
+                    # Set up kubeconfig for current user
+                    sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+                    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+                    # Persist for all future shells
+                    grep -qxF 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' ~/.bashrc \
+                        || echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> ~/.bashrc
+
+                    # Verify node is Ready
+                    kubectl get nodes
+                    echo "✅ k3s installed"
+                '''
+            }
+        }
+
+        stage('One-Time Setup: Install Helm') {
+            when { expression { params.RUN_ONE_TIME_SETUP == true } }
+            steps {
+                sh '''
+                    echo "⎈  Installing Helm 3"
+                    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+                    helm version
+                    echo "✅ Helm installed"
+                '''
+            }
+        }
+
+        stage('One-Time Setup: Install Docker') {
+            when { expression { params.RUN_ONE_TIME_SETUP == true } }
+            steps {
+                sh '''
+                    echo "🐳 Installing Docker"
+                    curl -fsSL https://get.docker.com | sh
+                    sudo usermod -aG docker jenkins
+                    sudo systemctl enable docker
+                    sudo systemctl start docker
+                    docker --version
+                    sudo systemctl restart docker
+                    sudo systemctl restart jenkins
+                    echo "✅ Docker installed — NOTE: Jenkins restarted, pipeline will abort here."
+                    echo "    Re-run this job (without RUN_ONE_TIME_SETUP) once Jenkins is back up."
+                '''
+            }
+        }
+
+        stage('One-Time Setup: Configure gcloud for Jenkins') {
+            when { expression { params.RUN_ONE_TIME_SETUP == true } }
+            steps {
+                // ✅ Key file injected securely, never touches disk permanently
+                withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'SA_KEY')]) {
+                    sh '''
+                        echo "☁️  Activating GCP Service Account..."
+        
+                        # Authenticate as service account (non-interactive)
+                        sudo -u jenkins gcloud auth activate-service-account \
+                            --key-file=$SA_KEY
+        
+                        # Configure Docker for Artifact Registry
+                        sudo -u jenkins gcloud auth configure-docker \
+                            asia-south2-docker.pkg.dev -q
+        
+                        # Set default project
+                        sudo -u jenkins gcloud config set project \
+                            project-d3f73645-327e-4f11-ba2
+        
+                        # Verify
+                        sudo -u jenkins gcloud auth list
+                        sudo -u jenkins gcloud config list
+        
+                        echo "✅ gcloud configured for jenkins user"
+                    '''
+                }
+            }
+        }
 
     stages {                                          // ✅ Fix 1: removed duplicate mistyped `steges` block
 
