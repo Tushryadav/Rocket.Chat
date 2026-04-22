@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         REGION           = 'asia-south2'
-        PROJECT_ID       = 'd3f73645-327e-4f11-ba2'
+        PROJECT_ID       = 'project-d3f73645-327e-4f11-ba2'
         REPOSITORY       = 'rocketchat'
         GAR_HOSTNAME     = "${REGION}-docker.pkg.dev"
         
@@ -116,21 +116,37 @@ pipeline {
         //     }
         // }
 
-        stage('Push Image') {
+        stage('Configure GCP Auth (Keyless)') {
             steps {
-                script {
-                    sh "docker push ${FULL_IMAGE}"
-                    sh "docker push ${LATEST_IMAGE}"
-                    env.IMAGES_PUSHED = 'true'
-                }
+                sh '''
+                gcloud auth configure-docker ${REGISTRY} --quiet
+                '''
             }
         }
 
+        stage('Tag Image') {
+            steps {
+                sh '''
+                docker tag ${IMAGE}:${TAG} \
+                ${REGISTRY}/${PROJECT_ID}/${REPO}/${IMAGE}:${TAG}
+                '''
+            }
+        }
+
+        stage('Push to Artifact Registry') {
+            steps {
+                sh '''
+                docker push \
+                ${REGISTRY}/${PROJECT_ID}/${REPO}/${IMAGE}:${TAG}
+                '''
+            }
+        }
+    
         stage('Bootstrap Cluster') {
             when {
                 allOf {
                     expression { env.IMAGES_PUSHED == 'true' }
-                    branch 'develop'
+                    expression { env.GIT_BRANCH == 'origin/develop' }
                 }
             }
             steps {
@@ -182,6 +198,7 @@ pipeline {
             when {
                 allOf {
                     expression { env.IMAGES_PUSHED == 'true' }
+                    expression { env.GIT_BRANCH == 'origin/develop' }
                     branch 'develop'
                 }
             }
