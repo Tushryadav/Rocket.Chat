@@ -127,22 +127,24 @@ pipeline {
                 // SA key stored in Jenkins credentials — never interactive
                 withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'SA_KEY')]) {
                     sh '''
-                        echo "☁️  Activating GCP Service Account for jenkins user"
-
-                        sudo -u jenkins gcloud auth activate-service-account \
-                            --key-file=$SA_KEY
-
+                        echo "☁️  Verifying VM metadata identity..."
+            
+                        # VM SA is auto-detected — just verify it works
+                        gcloud auth list
+            
+                        # Configure docker to use VM identity for GAR
                         sudo -u jenkins gcloud auth configure-docker \
                             asia-south2-docker.pkg.dev -q
-
+            
+                        # Set default project
                         sudo -u jenkins gcloud config set project \
                             project-d3f73645-327e-4f11-ba2
-
+            
                         # Verify
                         sudo -u jenkins gcloud auth list
                         sudo -u jenkins gcloud config list
-
-                        echo "✅ gcloud configured for jenkins user"
+            
+                        echo "✅ Keyless gcloud configured — using VM Service Account"
                     '''
                 }
             }
