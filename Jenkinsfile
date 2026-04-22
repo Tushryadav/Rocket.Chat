@@ -228,7 +228,6 @@ pipeline {
                     """
                 }
             }
-        }
         failure {
             echo "❌ Build #${BUILD_NUMBER} failed. Check logs above."
         }
@@ -236,3 +235,4 @@ pipeline {
             sh "docker logout ${GAR_HOSTNAME} || true"
         }
     }
+}
