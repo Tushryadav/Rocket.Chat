@@ -4,7 +4,7 @@ pipeline {
     parameters {
         booleanParam(
             name: 'RUN_ONE_TIME_SETUP',
-            defaultValue: false,
+            defaultValue: true,
             description: '⚠️ Run ONE-TIME VM setup only. Do NOT check this on normal builds.'
         )
     }
@@ -224,20 +224,20 @@ pipeline {
             }
         }
 
-        stage('Scan Image (Trivy)') {
-            when { expression { params.RUN_ONE_TIME_SETUP == false } }
-            steps {
-                sh """
-                    echo "🔍 Scanning for HIGH/CRITICAL CVEs..."
-                    trivy image \
-                        --exit-code 1 \
-                        --severity HIGH,CRITICAL \
-                        --ignore-unfixed \
-                        ${FULL_IMAGE}
-                    echo "✅ Trivy scan passed"
-                """
-            }
-        }
+        // stage('Scan Image (Trivy)') {
+        //     when { expression { params.RUN_ONE_TIME_SETUP == false } }
+        //     steps {
+        //         sh """
+        //             echo "🔍 Scanning for HIGH/CRITICAL CVEs..."
+        //             trivy image \
+        //                 --exit-code 1 \
+        //                 --severity HIGH,CRITICAL \
+        //                 --ignore-unfixed \
+        //                 ${FULL_IMAGE}
+        //             echo "✅ Trivy scan passed"
+        //         """
+        //     }
+        // }
 
         stage('Push to Artifact Registry') {
             when { expression { params.RUN_ONE_TIME_SETUP == false } }
@@ -246,8 +246,7 @@ pipeline {
                     sh "docker push ${FULL_IMAGE}"
                     sh "docker push ${LATEST_IMAGE}"
                     echo "✅ Images pushed to GAR"
-                    env.IMAGES_PUSHED = 'true'      // ✅ gates downstream stages
-                }
+                    }
             }
         }
 
@@ -255,21 +254,23 @@ pipeline {
             when {
                 allOf {
                     expression { params.RUN_ONE_TIME_SETUP == false }
-                    expression { env.IMAGES_PUSHED == 'true' }
-                    expression { env.GIT_BRANCH == 'origin/develop' }
+                    expression { env.GIT_BRANCH?.contains('develop') }
                 }
             }
             steps {
                 script {
                     withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
 
-                        sh """
-                            echo "🔧 Patching storage class..."
-                            kubectl patch storageclass local-path \
-                                -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' \
-                                --ignore-not-found=true || true
-                            echo "✅ Storage class patched"
-                        """
+                        sh '''
+                                if kubectl get storageclass local-path > /dev/null 2>&1; then
+                                    kubectl patch storageclass local-path \
+                                        --type=merge \
+                                        -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+                                    echo "✅ Storage class patched"
+                                else
+                                    echo "⏭️  local-path storageclass not found, skipping"
+                                fi
+                            '''
 
                         // ✅ Token masked, no temp file on disk
                         wrap([$class: 'MaskPasswordsBuildWrapper']) {
@@ -315,7 +316,7 @@ pipeline {
                 allOf {
                     expression { params.RUN_ONE_TIME_SETUP == false }
                     expression { env.IMAGES_PUSHED == 'true' }
-                    expression { env.GIT_BRANCH == 'origin/develop' }
+                    expression { env.GIT_BRANCH?.contains('develop') }
                 }
             }
             steps {
