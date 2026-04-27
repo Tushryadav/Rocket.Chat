@@ -1,3 +1,4 @@
+{{- if .Values.nginx.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -15,7 +16,7 @@ data:
             server_name _;
             
             location / {
-                proxy_pass http://{{ .Release.Name }}-rocketchat:3000;
+                proxy_pass http://rocketchat-app-rocketchat.rocketchat-build.svc.cluster.local:3000;
                 proxy_http_version 1.1;
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection "upgrade";
@@ -26,3 +27,4 @@ data:
             }
         }
     }
+{{- end }}

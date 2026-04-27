@@ -15,7 +15,7 @@ spec:
       labels:
         app: rocketchat
     spec:
-      imagePullSecrets:      # ✅ correct place
+      imagePullSecrets:
         {{- range .Values.rocketchat.imagePullSecrets }}
         - name: {{ .name }}
         {{- end }}
