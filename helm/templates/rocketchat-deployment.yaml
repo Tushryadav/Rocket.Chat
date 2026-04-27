@@ -15,6 +15,10 @@ spec:
       labels:
         app: rocketchat
     spec:
+      imagePullSecrets:      # ✅ correct place
+        {{- range .Values.rocketchat.imagePullSecrets }}
+        - name: {{ .name }}
+        {{- end }}
       volumes:
         - name: rocketchat-uploads
           persistentVolumeClaim:
