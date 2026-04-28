@@ -24,11 +24,8 @@ curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
 # Set up kubeconfig
 sudo chmod 644 /etc/rancher/k3s/k3s.yaml
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
-# Persist for future sessions
 echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> ~/.bashrc
-# NOTE: `source ~/.bashrc` has no effect in non-interactive scripts; the export
-# above is sufficient for the rest of this script's execution.
+source ~/.bashrc
 
 # Verify node is Ready
 kubectl get nodes
@@ -76,7 +73,7 @@ sudo apt install -y \
 sudo systemctl start docker
 sudo systemctl enable docker
 sudo usermod -aG docker "$USER"
-newgrp docker
+sudo newgrp docker
 
 # FIX: `newgrp docker` spawns an interactive subshell and HALTS the script.
 # Removed. The group membership takes effect on next login.
@@ -85,7 +82,7 @@ newgrp docker
 echo "========================================"
 echo " Step 5: Install Jenkins"
 echo "========================================"
-# FIX: Removed duplicate openjdk-17-jre install. Use openjdk-21-jre only,
+# FIX: Removed duplic ate openjdk-17-jre install. Use openjdk-21-jre only,
 # which satisfies Jenkins LTS requirements (Java 17+).
 sudo apt install -y fontconfig openjdk-21-jre
 java -version
@@ -122,6 +119,9 @@ helm install longhorn longhorn/longhorn \
 # Wait for Longhorn manager to be ready (~2-3 min)
 kubectl -n longhorn-system rollout status daemonset/longhorn-manager
 
+kubectl patch storageclass local-path \
+  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+
 # Verify storage class exists
 kubectl get storageclass
 
@@ -133,7 +133,7 @@ helm repo update
 
 helm install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace ingress-nginx \
-  --create-namespace
+  --create-namespace:
 
 # Wait for it to come up
 kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller
@@ -180,9 +180,17 @@ gcloud auth login
 gcloud config set project project-d3f73645-327e-4f11-ba2
 gcloud config get-value project
 
-sudo gcloud auth configure-docker asia-south2-docker.pkg.dev
+gcloud auth configure-docker asia-south2-docker.pkg.dev
 
+kubectl create namespace rocketchat
 
+# Create k8s image pull secret
+kubectl create secret docker-registry gar-secret \
+  --docker-server=asia-south2-docker.pkg.dev \
+  --docker-username=oauth2accesstoken \
+  --docker-password="$(gcloud auth print-access-token)" \
+  --docker-email=440563071013-compute@developer.gserviceaccount.com
+  --namespace rocketchat
 echo "========================================"
 echo " Step 12: Pre-flight Checks"
 echo "========================================"
