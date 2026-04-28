@@ -73,7 +73,6 @@ sudo apt install -y \
 sudo systemctl start docker
 sudo systemctl enable docker
 sudo usermod -aG docker "$USER"
-sudo newgrp docker
 
 # FIX: `newgrp docker` spawns an interactive subshell and HALTS the script.
 # Removed. The group membership takes effect on next login.
@@ -133,7 +132,7 @@ helm repo update
 
 helm install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace ingress-nginx \
-  --create-namespace:
+  --create-namespace
 
 # Wait for it to come up
 kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller
