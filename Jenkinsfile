@@ -174,6 +174,13 @@ pipeline {
                                 --set nginx.enabled=false \
                                 --namespace rocketchat-db \
                                 --create-namespace
+                                --wait \
+                                --timeout=5m
+                            """
+                    }
+                }
+            }
+        }
 
                             helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
@@ -182,6 +189,14 @@ pipeline {
                                 --set nginx.upstream="rocketchat-app-rocketchat.rocketchat-build.svc.cluster.local:3000" \
                                 --namespace rocketchat-nginx \
                                 --create-namespace
+                                --wait \
+                                --timeout=5m
+                            """
+        
+                    }
+                }
+            }
+        }
 
                             helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
@@ -190,6 +205,13 @@ pipeline {
                                 --set rocketchat.mongoUrl="mongodb://rocketchat:verysecurepassword@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/rocketchat?replicaSet=rs0&authSource=admin" \
                                 --set rocketchat.mongoOplogUrl="mongodb://rocketchat:verysecurepassword@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/local?replicaSet=rs0&authSource=admin" \
                                 --namespace rocketchat
+                                --wait \
+                                --timeout=10m
+                            """
+                    }
+                }
+            }
+        }
 
                             
                         """
