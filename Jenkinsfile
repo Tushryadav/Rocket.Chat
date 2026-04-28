@@ -170,7 +170,7 @@ pipeline {
                 script {
                     withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
                         sh """
-                            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+                            helm upgrade --install ${HELM_RELEASE_DB} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-db.yaml \
                                 --set rocketchat.enabled=false \
                                 --set nginx.enabled=false \
@@ -184,7 +184,7 @@ pipeline {
             }
         }
 
-                            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+                            helm upgrade --install ${HELM_RELEASE_NGINX} ${HELM_CHART_PATH} \
                          sh """
                                 -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
                                 --set mongodb.enabled=false \
