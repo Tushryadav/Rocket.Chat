@@ -53,7 +53,7 @@ pipeline {
             steps {
                 sh """
                     gcloud auth list
-                    gcloud auth configure-docker ${GAR_HOSTNAME} -q
+                    gcloud auth configure-docker ${GAR_HOSTNAME} 
                     echo "✅ Docker authenticated to GAR"
                 """
             }
@@ -97,7 +97,6 @@ pipeline {
             steps {
                 script {
                     sh "docker push ${FULL_IMAGE}"
-                    sh "docker push ${LATEST_IMAGE}"
                     echo "✅ Images pushed to GAR"
                     }
             }
@@ -114,14 +113,9 @@ pipeline {
                     withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
 
                         sh '''
-                                if kubectl get storageclass local-path > /dev/null 2>&1; then
                                     kubectl patch storageclass local-path \
-                                        --type=merge \
                                         -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
                                     echo "✅ Storage class patched"
-                                else
-                                    echo "⏭️  local-path storageclass not found, skipping"
-                                fi
                             '''
 
                         // ✅ Token masked, no temp file on disk
