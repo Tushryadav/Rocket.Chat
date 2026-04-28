@@ -11,12 +11,13 @@ data:
         worker_connections 1024;
     }
     http {
+        resolver kube-dns.kube-system.svc.cluster.local valid=10s;
         server {
             listen 8080;
             server_name _;
-            
             location / {
-                proxy_pass http://rocketchat-app-rocketchat.rocketchat-build.svc.cluster.local:3000;
+                set $upstream {{ .Values.nginx.upstream }};
+                proxy_pass http://$upstream;
                 proxy_http_version 1.1;
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection "upgrade";
