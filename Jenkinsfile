@@ -189,7 +189,7 @@ pipeline {
                                 -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
                                 --set mongodb.enabled=false \
                                 --set rocketchat.enabled=false \
-                                --set nginx.upstream="rocketchat-app-rocketchat.rocketchat-build.svc.cluster.local:3000" \
+                                --set nginx.upstream="rocketchat-app-rocketchat.rocketchat.svc.cluster.local:3000" \
                                 --namespace rocketchat-nginx \
                                 --create-namespace
                                 --wait \
