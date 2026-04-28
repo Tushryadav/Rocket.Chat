@@ -175,7 +175,8 @@ gcloud version
 # TODO: Replace interactive login with a service account for CI/automation:
 #   gcloud auth activate-service-account --key-file=/path/to/key.json
 gcloud auth login
-
+gcloud config set account 440563071013-compute@developer.gserviceaccount.com
+gcloud auth list
 # TODO: Verify your GCP project ID — the one below may be incomplete/incorrect.
 gcloud config set project project-d3f73645-327e-4f11-ba2
 gcloud config get-value project
@@ -189,7 +190,7 @@ kubectl create secret docker-registry gar-secret \
   --docker-server=asia-south2-docker.pkg.dev \
   --docker-username=oauth2accesstoken \
   --docker-password="$(gcloud auth print-access-token)" \
-  --docker-email=440563071013-compute@developer.gserviceaccount.com
+  --docker-email=440563071013-compute@developer.gserviceaccount.com \
   --namespace rocketchat
 echo "========================================"
 echo " Step 12: Pre-flight Checks"
