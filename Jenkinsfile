@@ -183,6 +183,7 @@ pipeline {
         }
 
                             helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+                         sh """
                                 -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
                                 --set mongodb.enabled=false \
                                 --set rocketchat.enabled=false \
@@ -199,6 +200,7 @@ pipeline {
         }
 
                             helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+                         sh """
                                 -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
                                 --set mongodb.enabled=false \
                                 --set nginx.enabled=false \
