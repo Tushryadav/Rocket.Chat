@@ -13,7 +13,7 @@ pipeline {
 
         HELM_RELEASE    = 'rocketchat'
         HELM_CHART_PATH = './helm'
-        K8S_NAMESPACE   = 'default'
+        K8S_NAMESPACE   = 'rocketchat'
     }
 
     options {
@@ -127,6 +127,7 @@ pipeline {
                                     --docker-server=${GAR_HOSTNAME} \
                                     --docker-username=oauth2accesstoken \
                                     --docker-password=\$TOKEN \
+                                    --docker-email=440563071013-compute@developer.gserviceaccount.com \
                                     --namespace=${K8S_NAMESPACE} \
                                     --dry-run=client -o yaml | kubectl apply -f - --validate=false
                                 echo "✅ GAR pull secret ready"
@@ -169,26 +170,30 @@ pipeline {
                         sh """
                             helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-db.yaml \
+                                --set rocketchat.enabled=false \
+                                --set nginx.enabled=false \
+                                --namespace rocketchat-db \
+                                --create-namespace
+
+                            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
+                                --set mongodb.enabled=false \
+                                --set rocketchat.enabled=false \
+                                --set nginx.upstream="rocketchat-app-rocketchat.rocketchat-build.svc.cluster.local:3000" \
+                                --namespace rocketchat-nginx \
+                                --create-namespace
+
+                            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
-                                --set rocketchat.image.repository=${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME} \
-                                --set rocketchat.image.tag=${BUILD_NUMBER} \
-                                --set rocketchat.image.pullPolicy=Always \
-                                --set rocketchat.imagePullSecrets[0].name=gar-secret \
-                                --namespace ${K8S_NAMESPACE} \
-                                --atomic \
-                                --cleanup-on-fail \
-                                --wait \
-                                --timeout 5m
+                                --set mongodb.enabled=false \
+                                --set nginx.enabled=false \
+                                --set rocketchat.mongoUrl="mongodb://rocketchat:verysecurepassword@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/rocketchat?replicaSet=rs0&authSource=admin" \
+                                --set rocketchat.mongoOplogUrl="mongodb://rocketchat:verysecurepassword@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/local?replicaSet=rs0&authSource=admin" \
+                                --namespace rocketchat
+
+                            
                         """
                         echo "✅ Helm deploy successful"
-
-                        sh """
-                            kubectl rollout status deployment/${HELM_RELEASE}-rocketchat \
-                                --namespace=${K8S_NAMESPACE} --timeout=3m
-                            kubectl get pods -n ${K8S_NAMESPACE} -l app=rocketchat
-                            kubectl get ingress -n ${K8S_NAMESPACE}
-                        """
                     }
                 }
             }
