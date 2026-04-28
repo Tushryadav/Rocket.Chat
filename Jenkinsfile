@@ -12,6 +12,8 @@ pipeline {
         LATEST_IMAGE    = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
 
         HELM_RELEASE    = 'rocketchat'
+        HELM_RELEASE_DB = 'rocketchat-db'
+        HELM_RELEASE_NGINX = 'rocketchat-nginx'
         HELM_CHART_PATH = './helm'
         K8S_NAMESPACE   = 'rocketchat'
     }
