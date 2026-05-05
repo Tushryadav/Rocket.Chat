@@ -11,11 +11,15 @@ pipeline {
         FULL_IMAGE      = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
         LATEST_IMAGE    = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
 
+        SERVICE_ACC     = '440563071013-compute@developer.gserviceaccount.com'
+
         HELM_RELEASE    = 'rocketchat'
         HELM_RELEASE_DB = 'rocketchat-db'
         HELM_RELEASE_NGINX = 'rocketchat-nginx'
         HELM_CHART_PATH = './helm'
         K8S_NAMESPACE   = 'rocketchat'
+        MONGO_DB        = 'rocketchat'
+        MONGO_PASS      = 'verysecurepassword'
     }
 
     options {
@@ -80,20 +84,20 @@ pipeline {
             }
         }
 
-        // stage('Scan Image (Trivy)') {
-        //     when { expression { params.RUN_ONE_TIME_SETUP == false } }
-        //     steps {
-        //         sh """
-        //             echo "🔍 Scanning for HIGH/CRITICAL CVEs..."
-        //             trivy image \
-        //                 --exit-code 1 \
-        //                 --severity HIGH,CRITICAL \
-        //                 --ignore-unfixed \
-        //                 ${FULL_IMAGE}
-        //             echo "✅ Trivy scan passed"
-        //         """
-        //     }
-        // }
+        stage('Scan Image (Trivy)') {
+            when { expression { params.RUN_ONE_TIME_SETUP == false } }
+            steps {
+                sh """
+                    echo "🔍 Scanning for HIGH/CRITICAL CVEs..."
+                    trivy image \
+                        --exit-code 1 \
+                        --severity HIGH,CRITICAL \
+                        --ignore-unfixed \
+                        ${FULL_IMAGE}
+                    echo "✅ Trivy scan passed"
+                """
+            }
+        }
 
         stage('Push to Artifact Registry') {
             steps {
@@ -129,7 +133,7 @@ pipeline {
                                     --docker-server=${GAR_HOSTNAME} \
                                     --docker-username=oauth2accesstoken \
                                     --docker-password=\$TOKEN \
-                                    --docker-email=440563071013-compute@developer.gserviceaccount.com \
+                                    --docker-email=${SERVICE_ACC} \
                                     --namespace=${K8S_NAMESPACE} \
                                     --dry-run=client -o yaml | kubectl apply -f - --validate=false
                                 echo "✅ GAR pull secret ready"
@@ -206,8 +210,8 @@ pipeline {
                                 -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
                                 --set mongodb.enabled=false \
                                 --set nginx.enabled=false \
-                                --set rocketchat.mongoUrl="mongodb://rocketchat:verysecurepassword@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/rocketchat?replicaSet=rs0&authSource=admin" \
-                                --set rocketchat.mongoOplogUrl="mongodb://rocketchat:verysecurepassword@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/local?replicaSet=rs0&authSource=admin" \
+                                --set rocketchat.mongoUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/rocketchat?replicaSet=rs0&authSource=admin" \
+                                --set rocketchat.mongoOplogUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/local?replicaSet=rs0&authSource=admin" \
                                 --namespace rocketchat
                                 --wait \
                                 --timeout=10m
