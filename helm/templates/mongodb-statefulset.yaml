@@ -81,10 +81,7 @@ spec:
           lifecycle:
             postStart:
               exec:
-                command:
-                  - bash
-                  - -c
-                  - |
+                command: ["/bash/bin", "-c", "echo pod started"]
           resources:
             {{- toYaml .Values.mongodb.resources | nindent 12 }}
           livenessProbe:
