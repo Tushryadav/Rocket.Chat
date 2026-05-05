@@ -37,8 +37,8 @@ rocketchat:
 
 mongodb:
   auth:
-    rootUser: admin
-    rootPassword: strongpassword123
+    rootUser: rocketchat
+    rootPassword: verysecurepassword
 
 nginx:
   enabled: true
