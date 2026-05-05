@@ -58,7 +58,6 @@ pipeline {
         stage('Auth to Artifact Registry') {
             steps {
                 sh """
-                    gcloud auth list
                     gcloud auth configure-docker ${GAR_HOSTNAME} 
                     echo "✅ Docker authenticated to GAR"
                 """
