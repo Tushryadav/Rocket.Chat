@@ -165,11 +165,7 @@ pipeline {
         }
 
         stage('Deploy with Helm') {
-            when {
-                allOf {
-                    expression { env.GIT_BRANCH?.contains('develop') }
-                }
-            }
+            when {  expression { env.GIT_BRANCH?.contains('develop') }
             steps {
                 script {
                     withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
@@ -179,40 +175,29 @@ pipeline {
                                 --set rocketchat.enabled=false \
                                 --set nginx.enabled=false \
                                 --namespace rocketchat-db \
-                                --create-namespace
+                                --create-namespace \
                                 --wait \
                                 --timeout=5m
-                            """
-                    }
-                }
-            }
-        }
-
+                        """
+                        sh """
                             helm upgrade --install ${HELM_RELEASE_NGINX} ${HELM_CHART_PATH} \
-                         sh """
                                 -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
                                 --set mongodb.enabled=false \
                                 --set rocketchat.enabled=false \
                                 --set nginx.upstream="rocketchat-app-rocketchat.rocketchat.svc.cluster.local:3000" \
                                 --namespace rocketchat-nginx \
-                                --create-namespace
+                                --create-namespace \
                                 --wait \
                                 --timeout=5m
-                            """
-        
-                    }
-                }
-            }
-        }
-
+                        """
+                        sh """
                             helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
-                         sh """
                                 -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
                                 --set mongodb.enabled=false \
                                 --set nginx.enabled=false \
                                 --set rocketchat.mongoUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/rocketchat?replicaSet=rs0&authSource=admin" \
                                 --set rocketchat.mongoOplogUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/local?replicaSet=rs0&authSource=admin" \
-                                --namespace rocketchat
+                                --namespace rocketchat \
                                 --wait \
                                 --timeout=10m
                             """
