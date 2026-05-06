@@ -35,6 +35,13 @@ spec:
       initContainers:
         - name: keyfile-init
           image: busybox
+          securityContext:                    # ← missing entirely
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "DAC_OVERRIDE"]  # only what chown actually needs
           command:
             - sh
             - -c
