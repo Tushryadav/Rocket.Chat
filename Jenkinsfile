@@ -84,7 +84,6 @@ pipeline {
         }
 
         stage('Scan Image (Trivy)') {
-            when { expression { params.RUN_ONE_TIME_SETUP == false } }
             steps {
                 sh """
                     echo "🔍 Scanning for HIGH/CRITICAL CVEs..."
@@ -102,6 +101,7 @@ pipeline {
             steps {
                 script {
                     sh "docker push ${FULL_IMAGE}"
+                    sh "docker push ${LATEST_IMAGE}"
                     echo "✅ Images pushed to GAR"
                     }
             }
