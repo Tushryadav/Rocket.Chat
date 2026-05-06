@@ -164,7 +164,7 @@ pipeline {
         }
 
         stage('Deploy with Helm') {
-            when {  expression { env.GIT_BRANCH?.contains('develop') }
+            when {  expression { env.GIT_BRANCH?.contains('develop') } }
             steps {
                 script {
                     withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
@@ -200,14 +200,6 @@ pipeline {
                                 --wait \
                                 --timeout=10m
                             """
-                    }
-                }
-            }
-        }
-
-                            
-                        """
-                        echo "✅ Helm deploy successful"
                     }
                 }
             }
