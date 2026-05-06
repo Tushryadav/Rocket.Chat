@@ -27,6 +27,8 @@ spec:
         - name: rocketchat-uploads
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-rocketchat-uploads
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: rocketchat
           securityContext:                      # ← this is missing from your file
@@ -76,6 +78,8 @@ spec:
           volumeMounts:
             - name: rocketchat-uploads
               mountPath: /app/uploads
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.rocketchat.resources | nindent 12 }}
 {{- end }}      
