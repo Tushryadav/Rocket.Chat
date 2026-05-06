@@ -6,7 +6,7 @@ metadata:
   labels:
     app: rocketchat
 spec:
-  replicas: {{ .Values.rocketchat.replicaset }}
+  replicas: {{ .Values.rocketchat.replicaCount }}
   selector:
     matchLabels:
       app: rocketchat
@@ -15,6 +15,10 @@ spec:
       labels:
         app: rocketchat
     spec:
+      securityContext:    # ← belongs HERE
+        runAsNonRoot: true
+        runAsUser: 65533
+        fsGroup: 65533
       imagePullSecrets:
         {{- range .Values.rocketchat.imagePullSecrets }}
         - name: {{ .name }}
@@ -25,6 +29,11 @@ spec:
             claimName: {{ .Release.Name }}-rocketchat-uploads
       containers:
         - name: rocketchat
+          securityContext:                      # ← this is missing from your file
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           image: "{{ .Values.rocketchat.image.repository }}:{{ .Values.rocketchat.image.tag }}"
           imagePullPolicy: {{ .Values.rocketchat.image.pullPolicy }}
           env:
