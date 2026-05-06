@@ -16,6 +16,9 @@ spec:
       labels:
         app: mongodb
     spec:
+      securityContext:
+          runAsNonRoot: false          # initContainer needs root — set per-container instead
+          fsGroup: 999 
       volumes:
         - name: mongo-keyfile          # secret source (must be here)
           secret:
@@ -46,6 +49,13 @@ spec:
               mountPath: /keyfile
       containers:
         - name: mongodb
+          securityContext:
+              runAsNonRoot: true
+              runAsUser: 999           # mongodb user in the official mongo image
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
           image: "{{ .Values.mongodb.image.repository }}:{{ .Values.mongodb.image.tag }}"
           imagePullPolicy: {{ .Values.mongodb.image.pullPolicy }}
           command:  
