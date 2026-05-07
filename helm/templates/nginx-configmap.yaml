@@ -1,31 +1,53 @@
-{{- if .Values.nginx.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Release.Name }}-nginx-conf
-  labels:
-    app: nginx
+  name: nginx-config
+  namespace: default
+
 data:
   nginx.conf: |
+    worker_processes auto;
+
     events {
-        worker_connections 1024;
+      worker_connections 1024;
     }
+
     http {
-        resolver kube-dns.kube-system.svc.cluster.local valid=10s;
-        server {
-            listen 8080;
-            server_name _;
-            location / {
-                set $upstream {{ .Values.nginx.upstream }};
-                proxy_pass http://$upstream;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection "upgrade";
-                proxy_set_header Host $http_host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-            }
+      include       /etc/nginx/mime.types;
+      default_type  application/octet-stream;
+
+      sendfile on;
+      tcp_nopush on;
+      tcp_nodelay on;
+      keepalive_timeout 65;
+
+      upstream rocketchat_backend {
+        server rocketchat-service:3000;
+      }
+
+      server {
+        listen 80;
+        server_name _;
+
+        location / {
+          proxy_pass http://rocketchat_backend;
+
+          proxy_http_version 1.1;
+
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+
+          proxy_read_timeout 86400;
         }
+      }
+
+      server {
+        listen 443 ssl;
+        server_name _;
+
+        ssl_certificate /etc/nginx/tls/tls.crt;
     }
-{{- end }}
