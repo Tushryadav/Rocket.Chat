@@ -101,7 +101,7 @@ sudo systemctl enable jenkins
 sudo systemctl start jenkins
 
 # Print initial admin password
-echo "Jenkins initial admin password:"
+# "Jenkins initial admin password:"
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 # Step 6: Install Longhorn"
@@ -156,6 +156,8 @@ grep -E "host|rootUrl|rootPassword|storageClassName" \
   helm/values/values-db.yaml
 
 kubectl create namespace rocketchat
+kubectl create namespace rocketchat-db
+kubectl create namespace rocketchat-nginx
 
 # Create k8s image pull secret
 kubectl create secret docker-registry gar-secret \
