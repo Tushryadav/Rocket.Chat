@@ -28,7 +28,6 @@ grep -rhE ^deb /etc/apt/sources.list* | grep "cloud-sdk"
 sudo apt-get update
 sudo apt-get install -y kubectl
 kubectl version --client
-gke-gcloud-auth-plugin --version
 sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin
 gcloud version
 kubectl get nodes
