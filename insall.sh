@@ -1,9 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "========================================"
-echo " Step 1: System Update & Dependencies"
-echo "========================================"
+# Step 1: System Update & Dependencies"
 sudo apt update && sudo apt upgrade -y
 
 # Longhorn requirements
@@ -16,31 +14,41 @@ sudo systemctl start iscsid
 # Verify iSCSI is running
 sudo systemctl status iscsid
 
-echo "========================================"
-echo " Step 2: Install k3s (Traefik disabled)"
-echo "========================================"
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
+# Step 11: Setup GCP & Push Image"
 
-# Set up kubeconfig
-sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> ~/.bashrc
-source ~/.bashrc
+sudo apt-get update
+sudo apt-get install ca-certificates gnupg curl
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+sudo apt-get update && sudo apt-get install google-cloud-cli
+grep -rhE ^deb /etc/apt/sources.list* | grep "cloud-sdk"
 
-# Verify node is Ready
-kubectl get nodes
+# Step 2: Install k3s (Traefik disabled)"
 
-echo "========================================"
-echo " Step 3: Install Helm"
-echo "========================================"
+sudo apt-get update
+sudo apt-get install -y kubectl
+kubectl version --client
+gke-gcloud-auth-plugin --version
+sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin
+gcloud version
+
+#   gcloud config
+gcloud auth login
+gcloud config set account 440563071013-compute@developer.gserviceaccount.com
+gcloud auth list
+# TODO: Verify your GCP project ID — the one below may be incomplete/incorrect.
+gcloud config set project project-d3f73645-327e-4f11-ba2
+gcloud config get-value project
+
+gcloud auth configure-docker asia-south2-docker.pkg.dev
+
+# Step 3: Install Helm"
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Verify
 helm version
 
-echo "========================================"
-echo " Step 4: Install Docker"
-echo "========================================"
+#Step 4: Install Docker
 # FIX: Use a plain list + --ignore-missing instead of the broken dpkg pipe.
 # `|| true` prevents set -e from exiting if packages are not installed.
 sudo apt remove --ignore-missing -y \
@@ -78,9 +86,7 @@ sudo usermod -aG docker "$USER"
 # Removed. The group membership takes effect on next login.
 # If you need docker immediately in this session, run: sg docker -c "docker ps"
 
-echo "========================================"
-echo " Step 5: Install Jenkins"
-echo "========================================"
+# Step 5: Install Jenkins
 # FIX: Removed duplic ate openjdk-17-jre install. Use openjdk-21-jre only,
 # which satisfies Jenkins LTS requirements (Java 17+).
 sudo apt install -y fontconfig openjdk-21-jre
@@ -104,9 +110,7 @@ sudo systemctl start jenkins
 echo "Jenkins initial admin password:"
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
-echo "========================================"
-echo " Step 6: Install Longhorn"
-echo "========================================"
+# Step 6: Install Longhorn"
 helm repo add longhorn https://charts.longhorn.io
 helm repo update
 
@@ -124,9 +128,8 @@ kubectl patch storageclass local-path \
 # Verify storage class exists
 kubectl get storageclass
 
-echo "========================================"
-echo " Step 7: Install Nginx Ingress Controller"
-echo "========================================"
+# Step 7: Install Nginx Ingress Controller"
+
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
 
@@ -140,47 +143,23 @@ kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller
 # Get the external IP
 kubectl -n ingress-nginx get svc ingress-nginx-controller
 
-echo "========================================"
-echo " Step 8: Verify Metrics Server"
-echo "========================================"
+# Step 8: Verify Metrics Server"
 kubectl -n kube-system get deploy metrics-server
 kubectl top nodes
 
-echo "========================================"
-echo " Step 9: Detect Public IP & Patch Values"
-echo "========================================"
+# Step 9: Detect Public IP & Patch Values"
+
 PUBLIC_IP=$(curl -s ifconfig.me)
 echo "Your public IP: $PUBLIC_IP"
 
 sed -i "s|<public_ip>|$PUBLIC_IP|g" helm/values/values-rocketchat.yaml
 sed -i "s|http://rocketchat.local|http://$PUBLIC_IP.nip.io|g" helm/values/values-rocketchat.yaml
 
-echo "========================================"
-echo " Step 10: Verify Values Files"
-echo "========================================"
+# Step 10: Verify Values Files"
+
 grep -E "host|rootUrl|rootPassword|storageClassName" \
   helm/values/values-rocketchat.yaml \
   helm/values/values-db.yaml
-
-echo "========================================"
-echo " Step 11: Setup GCP & Push Image"
-echo "========================================"
-# FIX: Removed `exec -l $SHELL` — it replaces the current process and halts
-# the script. Export PATH manually after install instead.
-curl https://sdk.cloud.google.com | bash
-export PATH="$HOME/google-cloud-sdk/bin:$PATH"
-gcloud version
-
-# TODO: Replace interactive login with a service account for CI/automation:
-#   gcloud auth activate-service-account --key-file=/path/to/key.json
-gcloud auth login
-gcloud config set account 440563071013-compute@developer.gserviceaccount.com
-gcloud auth list
-# TODO: Verify your GCP project ID — the one below may be incomplete/incorrect.
-gcloud config set project project-d3f73645-327e-4f11-ba2
-gcloud config get-value project
-
-gcloud auth configure-docker asia-south2-docker.pkg.dev
 
 kubectl create namespace rocketchat
 
@@ -191,9 +170,8 @@ kubectl create secret docker-registry gar-secret \
   --docker-password="$(gcloud auth print-access-token)" \
   --docker-email=440563071013-compute@developer.gserviceaccount.com \
   --namespace rocketchat
-echo "========================================"
-echo " Step 12: Pre-flight Checks"
-echo "========================================"
+
+# Step 12: Pre-flight Checks"
 echo "[1] Nodes:"
 kubectl get nodes
 
@@ -212,6 +190,6 @@ kubectl get pvc --all-namespaces
 echo "[6] Namespaces:"
 kubectl get namespaces | grep rocketchat
 
-echo "========================================"
+
 echo " Setup complete!"
 echo "========================================"
