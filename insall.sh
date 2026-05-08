@@ -31,6 +31,7 @@ kubectl version --client
 gke-gcloud-auth-plugin --version
 sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin
 gcloud version
+kubectl get nodes
 
 #   gcloud config
 gcloud auth login
@@ -49,8 +50,6 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 helm version
 
 #Step 4: Install Docker
-# FIX: Use a plain list + --ignore-missing instead of the broken dpkg pipe.
-# `|| true` prevents set -e from exiting if packages are not installed.
 sudo apt remove --ignore-missing -y \
   docker.io docker-compose docker-compose-v2 docker-doc \
   podman-docker containerd runc || true
@@ -83,12 +82,8 @@ sudo systemctl enable docker
 sudo usermod -aG docker "$USER"
 
 # FIX: `newgrp docker` spawns an interactive subshell and HALTS the script.
-# Removed. The group membership takes effect on next login.
-# If you need docker immediately in this session, run: sg docker -c "docker ps"
 
 # Step 5: Install Jenkins
-# FIX: Removed duplic ate openjdk-17-jre install. Use openjdk-21-jre only,
-# which satisfies Jenkins LTS requirements (Java 17+).
 sudo apt install -y fontconfig openjdk-21-jre
 java -version
 
