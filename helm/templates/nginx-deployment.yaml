@@ -37,7 +37,7 @@ spec:
           configMap:
             name: {{ .Release.Name }}-nginx-conf
         - name: nginx-tls
-        secret:
-          secretName: nginx-tls
-          optional: true
+          secret:
+            secretName: nginx-tls
+            optional: true
 {{- end }}
