@@ -32,6 +32,10 @@ spec:
         - name: mongopvc
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-mongo-pvc
+            - name: mongo-tmp                  
+            emptyDir: {}
+            - name: mongo-configdb              
+            emptyDir: {}
       initContainers:
         - name: keyfile-init
           image: busybox
@@ -90,6 +94,10 @@ spec:
           volumeMounts:
             - name: mongopvc
               mountPath: /data/db
+            - name: mongo-tmp              
+              mountPath: /tmp
+            - name: mongo-configdb
+              mountPath: /data/configdb
             - name: mongo-init-js
               mountPath: /scripts/mongo-init.js
               subPath: mongo-init.js
