@@ -26,18 +26,24 @@ spec:
             - name: nginx-config
               mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf
-            
+            {{- if .Values.nginx.tls.enabled }}
             - name: nginx-tls
               mountPath: /etc/nginx/tls
               readOnly: true
+            {{- end }}
           resources:
             {{- toYaml .Values.nginx.resources | nindent 12 }}
       volumes:
         - name: nginx-config
           configMap:
-            name: {{ .Release.Name }}-nginx-conf
+            name: {{ .Release.Name }}-nginx-config
+            items:
+              - key: {{ if .Values.nginx.tls.enabled }}nginx-ssl.conf{{ else }}nginx.conf{{ end }}
+                path: nginx.conf
+        {{- if .Values.nginx.tls.enabled }}
         - name: nginx-tls
           secret:
             secretName: nginx-tls
             optional: true
+        {{- end }}
 {{- end }}

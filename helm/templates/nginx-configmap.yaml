@@ -1,53 +1,79 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: nginx-config
-  namespace: default
-
+  name: {{ .Release.Name }}-nginx-config
+  namespace: {{ .Release.Namespace }}
 data:
   nginx.conf: |
     worker_processes auto;
-
     events {
       worker_connections 1024;
     }
-
     http {
       include       /etc/nginx/mime.types;
       default_type  application/octet-stream;
-
       sendfile on;
       tcp_nopush on;
       tcp_nodelay on;
       keepalive_timeout 65;
-
-      upstream rocketchat_backend {
-        server rocketchat-service:3000;
-      }
+      resolver kube-dns.kube-system.svc.cluster.local valid=10s;
 
       server {
         listen 80;
         server_name _;
-
         location / {
-          proxy_pass http://rocketchat_backend;
-
+          set $upstream rocketchat-app-rocketchat.rocketchat.svc.cluster.local:3000;
+          proxy_pass http://$upstream;
           proxy_http_version 1.1;
-
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "upgrade";
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
           proxy_set_header X-Forwarded-Proto $scheme;
-
           proxy_read_timeout 86400;
         }
+      }
+    }
+
+  nginx-ssl.conf: |
+    worker_processes auto;
+    events {
+      worker_connections 1024;
+    }
+    http {
+      include       /etc/nginx/mime.types;
+      default_type  application/octet-stream;
+      sendfile on;
+      tcp_nopush on;
+      tcp_nodelay on;
+      keepalive_timeout 65;
+      resolver kube-dns.kube-system.svc.cluster.local valid=10s;
+
+      server {
+        listen 80;
+        server_name _;
+        return 301 https://$host$request_uri;
       }
 
       server {
         listen 443 ssl;
         server_name _;
-
-        ssl_certificate /etc/nginx/tls/tls.crt;
+        ssl_certificate     /etc/nginx/tls/tls.crt;
+        ssl_certificate_key /etc/nginx/tls/tls.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_ciphers         HIGH:!aNULL:!MD5;
+        location / {
+          set $upstream rocketchat-app-rocketchat.rocketchat.svc.cluster.local:3000;
+          proxy_pass http://$upstream;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_read_timeout 86400;
+        }
+      }
     }

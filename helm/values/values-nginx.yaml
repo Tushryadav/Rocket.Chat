@@ -1,4 +1,7 @@
 nginx:
+  tls:
+    enabled: false
+    secretName: nginx-tls
   enabled: true
   replicaCount: 1
   image:
