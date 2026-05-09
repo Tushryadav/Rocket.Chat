@@ -8,7 +8,7 @@ metadata:
 spec:
   storageClassName: {{ .Values.mongodb.persistence.storageClassName | quote }}
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 15Gi

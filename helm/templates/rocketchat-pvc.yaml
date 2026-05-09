@@ -8,7 +8,7 @@ metadata:
 spec:
   storageClassName: {{ .Values.rocketchat.persistence.storageClassName | quote }}
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 10Gi

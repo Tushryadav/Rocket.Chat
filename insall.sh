@@ -30,13 +30,14 @@ sudo apt-get install -y kubectl
 kubectl version --client
 sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin
 gcloud version
+gcloud container clusters get-credentials main --region asia-south2 --project project-d3f73645-327e-4f11-ba2
 kubectl get nodes
 
-#   gcloud config
+#  gcloud config
 gcloud auth login
 gcloud config set account 440563071013-compute@developer.gserviceaccount.com
 gcloud auth list
-# TODO: Verify your GCP project ID — the one below may be incomplete/incorrect.
+#  Verify your GCP project ID — the one below may be incomplete/incorrect.
 gcloud config set project project-d3f73645-327e-4f11-ba2
 gcloud config get-value project
 
@@ -105,19 +106,19 @@ sudo systemctl start jenkins
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 # Step 6: Install Longhorn"
-helm repo add longhorn https://charts.longhorn.io
-helm repo update
+#helm repo add longhorn https://charts.longhorn.io
+#helm repo update
 
-helm install longhorn longhorn/longhorn \
-  --namespace longhorn-system \
-  --create-namespace \
-  --set defaultSettings.defaultReplicaCount=1
+#helm install longhorn longhorn/longhorn \
+#  --namespace longhorn-system \
+#  --create-namespace \
+#  --set defaultSettings.defaultReplicaCount=1
 
 # Wait for Longhorn manager to be ready (~2-3 min)
-kubectl -n longhorn-system rollout status daemonset/longhorn-manager
+#kubectl -n longhorn-system rollout status daemonset/longhorn-manager
 
-kubectl patch storageclass local-path \
-  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+#kubectl patch storageclass local-path \
+#  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
 
 # Verify storage class exists
 kubectl get storageclass
@@ -138,8 +139,8 @@ kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller
 kubectl -n ingress-nginx get svc ingress-nginx-controller
 
 # Step 8: Verify Metrics Server"
-kubectl -n kube-system get deploy metrics-server
-kubectl top nodes
+#kubectl -n kube-system get deploy metrics-server
+#kubectl top nodes
 
 # Step 9: Detect Public IP & Patch Values"
 

@@ -32,10 +32,10 @@ spec:
         - name: mongopvc
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-mongo-pvc
-            - name: mongo-tmp                  
-            emptyDir: {}
-            - name: mongo-configdb              
-            emptyDir: {}
+        - name: mongo-tmp                  
+          emptyDir: {}
+        - name: mongo-configdb              
+          emptyDir: {}
       initContainers:
         - name: keyfile-init
           image: busybox
@@ -106,7 +106,7 @@ spec:
           lifecycle:
             postStart:
               exec:
-                command: ["/bash/bin", "-c", "echo pod started"]
+                command: ["/bin/bash", "-c", "echo pod started"]
           resources:
             {{- toYaml .Values.mongodb.resources | nindent 12 }}
           livenessProbe:
