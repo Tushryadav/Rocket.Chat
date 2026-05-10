@@ -8,11 +8,11 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y curl wget git open-iscsi nfs-common
 
 # Enable iSCSI (required by Longhorn for RWX volumes)
-sudo systemctl enable iscsid
-sudo systemctl start iscsid
+#sudo systemctl enable iscsid
+#sudo systemctl start iscsid
 
 # Verify iSCSI is running
-sudo systemctl status iscsid
+#sudo systemctl status iscsid
 
 # Step 11: Setup GCP & Push Image"
 
@@ -84,26 +84,26 @@ sudo usermod -aG docker "$USER"
 # FIX: `newgrp docker` spawns an interactive subshell and HALTS the script.
 
 # Step 5: Install Jenkins
-sudo apt install -y fontconfig openjdk-21-jre
-java -version
+#sudo apt install -y fontconfig openjdk-21-jre
+#java -version
 
-sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
-  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+#sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+#  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
 
-echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
-  https://pkg.jenkins.io/debian-stable binary/ \
-  | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+#echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
+#  https://pkg.jenkins.io/debian-stable binary/ \
+#  | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
 
-sudo apt update
-sudo apt install -y jenkins
+#sudo apt update
+#sudo apt install -y jenkins
 
 # Enable & start Jenkins
-sudo systemctl enable jenkins
-sudo systemctl start jenkins
+#sudo systemctl enable jenkins
+#sudo systemctl start jenkins
 
 # Print initial admin password
 # "Jenkins initial admin password:"
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+#sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 # Step 6: Install Longhorn"
 #helm repo add longhorn https://charts.longhorn.io

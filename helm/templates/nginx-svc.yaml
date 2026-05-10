@@ -10,10 +10,10 @@ spec:
   ports:
     - name: http
       port: {{ .Values.nginx.service.httpPort }}
-      targetPort: 8080
+      targetPort: 80
     - name: https
       port: {{ .Values.nginx.service.httpsPort }}
-      targetPort: 8443
+      targetPort: 443
   selector:
     app: nginx
 {{- end }}

@@ -20,8 +20,8 @@ spec:
           image: "{{ .Values.nginx.image.repository }}:{{ .Values.nginx.image.tag }}"
           imagePullPolicy: {{ .Values.nginx.image.pullPolicy }}
           ports:
-            - containerPort: 8080
-            - containerPort: 8443
+            - containerPort: 80
+            - containerPort: 443
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/nginx/nginx.conf
