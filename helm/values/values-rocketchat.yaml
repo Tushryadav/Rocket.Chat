@@ -1,7 +1,7 @@
 rocketchat:
   enabled: true
   replicaCount: 1
-  rootUrl: "http://34.131.64.232.nip.io"
+  rootUrl: "http://<public_ip>.nip.io"
   imagePullSecrets:          # ← move here, NOT under image:
     - name: gar-secret
   image:
@@ -12,7 +12,7 @@ rocketchat:
     enabled: true
     className: nginx
     hosts:
-      - host: 34.131.64.232.nip.io   # change this
+      - host: <public_ip>.nip.io   # change this
         paths:
           - path: /
             pathType: Prefix
