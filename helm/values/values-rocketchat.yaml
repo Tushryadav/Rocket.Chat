@@ -1,7 +1,7 @@
 rocketchat:
   enabled: true
   replicaCount: 1
-  rootUrl: "http://<public_ip>.nip.io"
+  rootUrl: "34.131.123.161.nip.io"
   imagePullSecrets:          # ← move here, NOT under image:
     - name: gar-secret
   image:
