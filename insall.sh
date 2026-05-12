@@ -40,6 +40,28 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 # Verify
 helm version
 
+# Step 5: Install Jenkins
+sudo apt install -y fontconfig openjdk-21-jre
+java -version
+
+sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+
+echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
+  https://pkg.jenkins.io/debian-stable binary/ \
+  | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+sudo apt update
+sudo apt install -y jenkins
+
+# Enable & start Jenkins
+sudo systemctl enable jenkins
+sudo systemctl start jenkins
+
+# Print initial admin password
+# "Jenkins initial admin password:"
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+
 #Step 4: Install Docker
 sudo apt remove --ignore-missing -y \
   docker.io docker-compose docker-compose-v2 docker-doc \
@@ -72,30 +94,7 @@ sudo systemctl start docker
 sudo systemctl enable docker
 sudo usermod -aG docker jenkins
 sudo chmod 666 /var/run/docker.sock
-
-# FIX: `newgrp docker` spawns an interactive subshell and HALTS the script.
-
-# Step 5: Install Jenkins
-sudo apt install -y fontconfig openjdk-21-jre
-java -version
-
-sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
-  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
-
-echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
-  https://pkg.jenkins.io/debian-stable binary/ \
-  | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
-
-sudo apt update
-sudo apt install -y jenkins
-
-# Enable & start Jenkins
-sudo systemctl enable jenkins
-sudo systemctl start jenkins
-
-# Print initial admin password
-# "Jenkins initial admin password:"
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+sudo systemctl restart jenkins
 
 # Step 6: Enable Filestore CSI Driver on GKE
 gcloud container clusters update main \
