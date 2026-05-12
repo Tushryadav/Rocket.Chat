@@ -52,7 +52,7 @@ pipeline {
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig-staging'
                         env.ROOT_URL          = '<public_ip>:8081'
                         env.HELM_RELEASE      = 'rocketchat-staging'
-                        env.GKE_ZONE          = 'asia-south1-c"
+                        env.GKE_ZONE          = 'asia-south1-c'
                         env.GKE_CLUSTER       = 'gke-staging-cluster'
                         env.HELM_RELEASE_DB   = 'rocketchat-db-staging'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx-staging'
