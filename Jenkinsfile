@@ -50,7 +50,7 @@ pipeline {
                     } else if (env.GIT_BRANCH?.contains('main')) {
                         env.DEPLOY_ENV        = 'staging'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig-staging'
-                        env.ROOT_URL          = '<public_ip>:8081'
+                        env.ROOT_URL          = '34.138.88.107:8081'
                         env.HELM_RELEASE      = 'rocketchat-staging'
                         env.GKE_ZONE          = 'asia-south1-c"
                         env.GKE_CLUSTER       = 'gke-staging-cluster'
@@ -61,7 +61,7 @@ pipeline {
                     } else if (env.GIT_BRANCH?.contains('develop')) {
                         env.DEPLOY_ENV        = 'dev'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig'
-                        env.ROOT_URL          = 'http://<public_ip>:8082'
+                        env.ROOT_URL          = '34.138.88.107:8082'
                         env.HELM_RELEASE      = 'rocketchat-app'
                         env.GKE_CLUSTER       = 'main'
                         env.GKE_ZONE          = 'us-east1-d'
