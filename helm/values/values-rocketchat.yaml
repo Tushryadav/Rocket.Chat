@@ -1,8 +1,8 @@
 rocketchat:
   enabled: true
   replicaCount: 1
-  rootUrl: "34.131.123.161.nip.io"
-  imagePullSecrets:          # ← move here, NOT under image:
+  rootUrl: "http://34.131.123.161"
+  imagePullSecrets:
     - name: gar-secret
   image:
     repository: asia-south2-docker.pkg.dev/project-d3f73645-327e-4f11-ba2/rocketchat/rocketchat-app
@@ -11,11 +11,7 @@ rocketchat:
   ingress:
     enabled: false
     className: nginx
-    hosts:
-      - host: []   # change this
-        paths:
-          - path: /
-            pathType: Prefix
+    hosts: []
   service:
     type: ClusterIP
     port: 3000
@@ -39,7 +35,6 @@ mongodb:
   auth:
     rootUser: rocketchat
     rootPassword: verysecurepassword
-
 nginx:
   enabled: true
   replicaCount: 1
