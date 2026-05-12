@@ -34,8 +34,6 @@ gcloud auth list
 gcloud config set project project-d3f73645-327e-4f11-ba2
 gcloud config get-value project
 
-gcloud auth configure-docker asia-south2-docker.pkg.dev
-
 # Step 3: Install Helm"
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
@@ -72,7 +70,7 @@ sudo apt install -y \
 
 sudo systemctl start docker
 sudo systemctl enable docker
-sudo usermod -aG docker "$USER"
+sudo usermod -aG docker jenkins
 
 # FIX: `newgrp docker` spawns an interactive subshell and HALTS the script.
 
@@ -133,6 +131,16 @@ echo "Your public IP: $PUBLIC_IP"
 sed -i "s|<public_ip>|$PUBLIC_IP|g" helm/values/values-rocketchat.yaml
 sed -i "s|http://rocketchat.local|http://$PUBLIC_IP.nip.io|g" helm/values/values-rocketchat.yaml
 
+# gcloud access — copy gcloud config to jenkins home
+sudo mkdir -p /var/lib/jenkins/.config/gcloud
+sudo cp -r ~/.config/gcloud/* /var/lib/jenkins/.config/gcloud/
+sudo chown -R jenkins:jenkins /var/lib/jenkins/.config
+
+# kubectl access — copy kubeconfig to jenkins home
+sudo mkdir -p /var/lib/jenkins/.kube
+sudo cp ~/.kube/config /var/lib/jenkins/.kube/config
+sudo chown -R jenkins:jenkins /var/lib/jenkins/.kube
+
 # Step 10: Verify Values Files"
 
 grep -E "host|rootUrl|rootPassword|storageClassName" \
@@ -144,12 +152,12 @@ kubectl create namespace rocketchat-db
 kubectl create namespace rocketchat-nginx
 
 # Create k8s image pull secret
-kubectl create secret docker-registry gar-secret \
-  --docker-server=asia-south2-docker.pkg.dev \
-  --docker-username=oauth2accesstoken \
-  --docker-password="$(gcloud auth print-access-token)" \
-  --docker-email=440563071013-compute@developer.gserviceaccount.com \
-  --namespace rocketchat
+#kubectl create secret docker-registry gar-secret \
+#  --docker-server=asia-south2-docker.pkg.dev \
+#  --docker-username=oauth2accesstoken \
+#  --docker-password="$(gcloud auth print-access-token)" \
+#  --docker-email=440563071013-compute@developer.gserviceaccount.com \
+#  --namespace rocketchat
 
 # Step 12: Pre-flight Checks"
 echo "[1] Nodes:"
