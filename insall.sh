@@ -71,6 +71,7 @@ sudo apt install -y \
 sudo systemctl start docker
 sudo systemctl enable docker
 sudo usermod -aG docker jenkins
+sudo chmod 666 /var/run/docker.sock
 
 # FIX: `newgrp docker` spawns an interactive subshell and HALTS the script.
 
