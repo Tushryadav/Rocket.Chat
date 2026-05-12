@@ -12,7 +12,7 @@ rocketchat:
     enabled: false
     className: nginx
     hosts:
-      - host: 34.131.43.30.nip.io   # change this
+      - host: []   # change this
         paths:
           - path: /
             pathType: Prefix
