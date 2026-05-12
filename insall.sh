@@ -75,7 +75,7 @@ sudo chmod 666 /var/run/docker.sock
 
 # FIX: `newgrp docker` spawns an interactive subshell and HALTS the script.
 
-Step 5: Install Jenkins
+# Step 5: Install Jenkins
 sudo apt install -y fontconfig openjdk-21-jre
 java -version
 
