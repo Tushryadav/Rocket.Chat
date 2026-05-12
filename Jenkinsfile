@@ -50,8 +50,10 @@ pipeline {
                     } else if (env.GIT_BRANCH?.contains('main')) {
                         env.DEPLOY_ENV        = 'staging'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig-staging'
-                        env.ROOT_URL          = 'http://staging.rocketchat.example.com'
+                        env.ROOT_URL          = '<public_ip>:8081'
                         env.HELM_RELEASE      = 'rocketchat-staging'
+                        env.GKE_ZONE          = 'asia-south1-c"
+                        env.GKE_CLUSTER       = 'gke-staging-cluster'
                         env.HELM_RELEASE_DB   = 'rocketchat-db-staging'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx-staging'
                         env.K8S_NAMESPACE     = 'rocketchat-staging'
@@ -59,8 +61,10 @@ pipeline {
                     } else if (env.GIT_BRANCH?.contains('develop')) {
                         env.DEPLOY_ENV        = 'dev'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig'
-                        env.ROOT_URL          = 'http://<public_ip>'
+                        env.ROOT_URL          = 'http://<public_ip>:8082'
                         env.HELM_RELEASE      = 'rocketchat-app'
+                        env.GKE_CLUSTER       = 'main'
+                        env.GKE_ZONE          = 'us-east1-d'
                         env.HELM_RELEASE_DB   = 'rocketchat-db'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx'
                         env.K8S_NAMESPACE     = 'rocketchat'
@@ -99,6 +103,16 @@ pipeline {
                     gcloud auth configure-docker ${GAR_HOSTNAME}
                     echo "✅ Docker authenticated to GAR"
                 """
+            }
+        }
+
+        stage('Connect to GKE') {
+            steps {
+                sh '''
+                    gcloud container clusters get-credentials ${GKE_CLUSTER} \
+                        --zone ${GKE_ZONE} \
+                        --project ${PROJECT_ID}
+                '''
             }
         }
 
