@@ -13,11 +13,7 @@ pipeline {
 
         SERVICE_ACC     = '440563071013-compute@developer.gserviceaccount.com'
 
-        HELM_RELEASE    = 'rocketchat'
-        HELM_RELEASE_DB = 'rocketchat-db'
-        HELM_RELEASE_NGINX = 'rocketchat-nginx'
         HELM_CHART_PATH = './helm'
-        K8S_NAMESPACE   = 'rocketchat'
         MONGO_DB        = 'rocketchat'
         MONGO_PASS      = 'verysecurepassword'
     }
@@ -38,6 +34,47 @@ pipeline {
             steps { checkout scm }
         }
 
+        // ── Set per-branch environment ──────────────────────────────────────
+        stage('Set Environment') {
+            steps {
+                script {
+                    if (env.GIT_BRANCH?.contains('prod')) {
+                        env.DEPLOY_ENV        = 'prod'
+                        env.KUBECONFIG_ID     = 'k8s-kubeconfig-prod'
+                        env.ROOT_URL          = 'http://prod.rocketchat.example.com'
+                        env.HELM_RELEASE      = 'rocketchat-prod'
+                        env.HELM_RELEASE_DB   = 'rocketchat-db-prod'
+                        env.HELM_RELEASE_NGINX= 'rocketchat-nginx-prod'
+                        env.K8S_NAMESPACE     = 'rocketchat-prod'
+
+                    } else if (env.GIT_BRANCH?.contains('main')) {
+                        env.DEPLOY_ENV        = 'staging'
+                        env.KUBECONFIG_ID     = 'k8s-kubeconfig-staging'
+                        env.ROOT_URL          = 'http://staging.rocketchat.example.com'
+                        env.HELM_RELEASE      = 'rocketchat-staging'
+                        env.HELM_RELEASE_DB   = 'rocketchat-db-staging'
+                        env.HELM_RELEASE_NGINX= 'rocketchat-nginx-staging'
+                        env.K8S_NAMESPACE     = 'rocketchat-staging'
+
+                    } else if (env.GIT_BRANCH?.contains('develop')) {
+                        env.DEPLOY_ENV        = 'dev'
+                        env.KUBECONFIG_ID     = 'k8s-kubeconfig'
+                        env.ROOT_URL          = 'http://<public_ip>'
+                        env.HELM_RELEASE      = 'rocketchat-app'
+                        env.HELM_RELEASE_DB   = 'rocketchat-db'
+                        env.HELM_RELEASE_NGINX= 'rocketchat-nginx'
+                        env.K8S_NAMESPACE     = 'rocketchat'
+
+                    } else {
+                        env.DEPLOY_ENV        = 'none'
+                        echo "⚠️ Branch ${env.GIT_BRANCH} — build only, no deploy"
+                    }
+                    echo "🌍 Environment: ${env.DEPLOY_ENV}"
+                }
+            }
+        }
+
+        // ── Validate ────────────────────────────────────────────────────────
         stage('Validate') {
             steps {
                 script {
@@ -55,15 +92,17 @@ pipeline {
             }
         }
 
+        // ── Auth ────────────────────────────────────────────────────────────
         stage('Auth to Artifact Registry') {
             steps {
                 sh """
-                    gcloud auth configure-docker ${GAR_HOSTNAME} 
+                    gcloud auth configure-docker ${GAR_HOSTNAME}
                     echo "✅ Docker authenticated to GAR"
                 """
             }
         }
 
+        // ── Build ───────────────────────────────────────────────────────────
         stage('Build Image') {
             steps {
                 script {
@@ -83,6 +122,7 @@ pipeline {
             }
         }
 
+        // ── Scan ────────────────────────────────────────────────────────────
         stage('Scan Image (Trivy)') {
             steps {
                 sh """
@@ -97,114 +137,105 @@ pipeline {
             }
         }
 
+        // ── Push ────────────────────────────────────────────────────────────
         stage('Push to Artifact Registry') {
             steps {
                 script {
                     sh "docker push ${FULL_IMAGE}"
                     sh "docker push ${LATEST_IMAGE}"
                     echo "✅ Images pushed to GAR"
-                    }
+                }
             }
         }
 
+        // ── Bootstrap ───────────────────────────────────────────────────────
         stage('Bootstrap Cluster') {
-            when {
-                allOf {
-                    expression { env.GIT_BRANCH?.contains('develop') }
-                }
-            }
+            when { expression { env.DEPLOY_ENV != 'none' } }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: env.KUBECONFIG_ID, variable: 'KUBECONFIG')]) {
 
-                        sh '''
-                                    kubectl patch storageclass local-path \
-                                        -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
-                                    echo "✅ Storage class patched"
-                            '''
-
-                        // ✅ Token masked, no temp file on disk
                         wrap([$class: 'MaskPasswordsBuildWrapper']) {
                             sh """
                                 echo "🔐 Creating GAR image-pull secret..."
                                 TOKEN=\$(gcloud auth print-access-token)
-                                kubectl create secret docker-registry gar-secret \
-                                    --docker-server=${GAR_HOSTNAME} \
-                                    --docker-username=oauth2accesstoken \
-                                    --docker-password=\$TOKEN \
-                                    --docker-email=${SERVICE_ACC} \
-                                    --namespace=${K8S_NAMESPACE} \
-                                    --dry-run=client -o yaml | kubectl apply -f - --validate=false
-                                echo "✅ GAR pull secret ready"
+                                for NS in rocketchat-db-${env.DEPLOY_ENV} rocketchat-nginx-${env.DEPLOY_ENV} ${env.K8S_NAMESPACE}; do
+                                    kubectl create namespace \$NS --dry-run=client -o yaml | kubectl apply -f -
+                                    kubectl create secret docker-registry gar-secret \
+                                        --docker-server=${GAR_HOSTNAME} \
+                                        --docker-username=oauth2accesstoken \
+                                        --docker-password=\$TOKEN \
+                                        --docker-email=${SERVICE_ACC} \
+                                        --namespace=\$NS \
+                                        --dry-run=client -o yaml | kubectl apply -f - --validate=false
+                                done
+                                echo "✅ GAR pull secrets ready in all namespaces"
                             """
                         }
 
-                        sh """
-                            echo "⏳ Waiting for Longhorn..."
-                            kubectl -n longhorn-system wait \
-                                --for=condition=ready pod \
-                                -l app=longhorn-manager \
-                                --timeout=120s || true
-                            echo "✅ Longhorn ready"
-                        """
-
-                        sh """
-                            echo "⏳ Waiting for Nginx Ingress..."
-                            kubectl -n ingress-nginx wait \
-                                --for=condition=ready pod \
-                                -l app.kubernetes.io/name=ingress-nginx \
-                                --timeout=120s || true
-                            echo "✅ Nginx Ingress ready"
-                        """
-
-                        echo "✅ Cluster bootstrap complete"
+                        echo "✅ Cluster bootstrap complete for ${env.DEPLOY_ENV}"
                     }
                 }
             }
         }
 
+        // ── Deploy ──────────────────────────────────────────────────────────
         stage('Deploy with Helm') {
-            when {  expression { env.GIT_BRANCH?.contains('develop') } }
+            when { expression { env.DEPLOY_ENV != 'none' } }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: env.KUBECONFIG_ID, variable: 'KUBECONFIG')]) {
+
+                        def dbNamespace    = "rocketchat-db-${env.DEPLOY_ENV == 'dev' ? '' : env.DEPLOY_ENV}".replaceAll('-$','')
+                        def nginxNamespace = "rocketchat-nginx-${env.DEPLOY_ENV == 'dev' ? '' : env.DEPLOY_ENV}".replaceAll('-$','')
+                        def mongoHost      = "${env.HELM_RELEASE_DB}-mongodb-0.${env.HELM_RELEASE_DB}-mongodb.${dbNamespace}.svc.cluster.local"
+
+                        // 1. Database
                         sh """
-                            helm upgrade --install ${HELM_RELEASE_DB} ${HELM_CHART_PATH} \
+                            helm upgrade --install ${env.HELM_RELEASE_DB} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-db.yaml \
                                 --set rocketchat.enabled=false \
                                 --set nginx.enabled=false \
-                                --namespace rocketchat-db \
+                                --namespace ${dbNamespace} \
                                 --create-namespace \
-                                --wait \
-                                --timeout=5m
+                                --timeout=10m
                         """
+                        echo "✅ DB deployed"
+
+                        // 2. Nginx
                         sh """
-                            helm upgrade --install ${HELM_RELEASE_NGINX} ${HELM_CHART_PATH} \
+                            helm upgrade --install ${env.HELM_RELEASE_NGINX} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-nginx.yaml \
                                 --set mongodb.enabled=false \
                                 --set rocketchat.enabled=false \
-                                --set nginx.upstream="rocketchat-app-rocketchat.rocketchat.svc.cluster.local:3000" \
-                                --namespace rocketchat-nginx \
+                                --namespace ${nginxNamespace} \
                                 --create-namespace \
                                 --wait \
                                 --timeout=5m
                         """
+                        echo "✅ Nginx deployed"
+
+                        // 3. RocketChat app
                         sh """
-                            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+                            helm upgrade --install ${env.HELM_RELEASE} ${HELM_CHART_PATH} \
                                 -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
                                 --set mongodb.enabled=false \
                                 --set nginx.enabled=false \
-                                --set rocketchat.mongoUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/rocketchat?replicaSet=rs0&authSource=admin" \
-                                --set rocketchat.mongoOplogUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@rocketchat-db-mongodb-0.rocketchat-db-mongodb.rocketchat-db.svc.cluster.local:27017/local?replicaSet=rs0&authSource=admin" \
-                                --namespace rocketchat \
+                                --set rocketchat.mongoUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@${mongoHost}:27017/rocketchat?replicaSet=rs0&authSource=admin" \
+                                --set rocketchat.mongoOplogUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@${mongoHost}:27017/local?replicaSet=rs0&authSource=admin" \
+                                --set rocketchat.rootUrl="${env.ROOT_URL}" \
+                                --namespace ${env.K8S_NAMESPACE} \
+                                --create-namespace \
                                 --wait \
                                 --timeout=10m
-                            """
+                        """
+                        echo "✅ RocketChat deployed to ${env.DEPLOY_ENV}"
                     }
                 }
             }
         }
 
+        // ── Cleanup ─────────────────────────────────────────────────────────
         stage('Cleanup') {
             steps {
                 script {
@@ -221,20 +252,19 @@ pipeline {
 
     post {
         success {
-            script { 
-                    echo """
-                    ╔══════════════════════════════════════╗
-                    ║        BUILD SUCCESSFUL ✅           ║
-                    ╠══════════════════════════════════════╣
-                    ║ Image : ${FULL_IMAGE}
-                    ║ Latest: ${LATEST_IMAGE}
-                    ║ Build : #${BUILD_NUMBER}
-                    ╚══════════════════════════════════════╝
-                    """
-                }
-            }
+            echo """
+            ╔══════════════════════════════════════╗
+            ║        BUILD SUCCESSFUL ✅           ║
+            ╠══════════════════════════════════════╣
+            ║ Branch : ${GIT_BRANCH}
+            ║ Env    : ${DEPLOY_ENV}
+            ║ Image  : ${FULL_IMAGE}
+            ║ Build  : #${BUILD_NUMBER}
+            ╚══════════════════════════════════════╝
+            """
+        }
         failure {
-            echo "❌ Build #${BUILD_NUMBER} failed. Check logs above."
+            echo "❌ Build #${BUILD_NUMBER} failed on ${GIT_BRANCH}. Check logs above."
         }
         always {
             sh "docker logout ${GAR_HOSTNAME} || true"
