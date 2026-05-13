@@ -47,6 +47,8 @@ pipeline {
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx-prod'
                         env.K8S_NAMESPACE     = 'rocketchat-prod'
                         env.PROJECT_ID        = 'project-d3f73645-327e-4f11-ba2'
+                        env.DB_NAMESPACE       = 'rocketchat-db-prod'
+                        env.NGINX_NAMESPACE    = 'rocketchat-nginx-prod'
 
                     } else if (env.GIT_BRANCH?.contains('staging')) {
                         env.DEPLOY_ENV        = 'staging'
@@ -58,19 +60,20 @@ pipeline {
                         env.HELM_RELEASE_DB   = 'rocketchat-db-staging'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx-staging'
                         env.K8S_NAMESPACE     = 'rocketchat-staging'
-                        env.PROJECT_ID        = 'project-d3f73645-327e-4f11-ba2'
+                        env.DB_NAMESPACE       = 'rocketchat-db-staging'
+                        env.NGINX_NAMESPACE    = 'rocketchat-nginx-staging'
 
                     } else if (env.GIT_BRANCH?.contains('develop')) {
                         env.DEPLOY_ENV        = 'dev'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig'
-                        env.ROOT_URL          = '34.74.134.35:8082'
                         env.HELM_RELEASE      = 'rocketchat-app'
                         env.GKE_CLUSTER       = 'main'
                         env.GKE_ZONE          = 'us-east1'
                         env.HELM_RELEASE_DB   = 'rocketchat-db'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx'
                         env.K8S_NAMESPACE     = 'rocketchat'
-                        env.PROJECT_ID        = 'project-d3f73645-327e-4f11-ba2'
+                        env.DB_NAMESPACE       = 'rocketchat-db'
+                        env.NGINX_NAMESPACE    = 'rocketchat-nginx'
 
                     } else {
                         env.DEPLOY_ENV        = 'none'
@@ -231,6 +234,30 @@ pipeline {
                                 --timeout=5m
                         """
                         echo "✅ Nginx deployed"
+                        
+                        // 3. Fetch LB IP dynamically from this cluster
+                        def lbIp = ""
+                        echo "⏳ Waiting for nginx LoadBalancer IP..."
+                        for (int i = 0; i < 24; i++) {
+                            lbIp = sh(
+                                script: """
+                                    kubectl get svc ${env.HELM_RELEASE_NGINX}-nginx \
+                                        -n ${env.NGINX_NAMESPACE} \
+                                        -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true
+                                """,
+                                returnStdout: true
+                            ).trim()
+                            if (lbIp) {
+                                echo "✅ LB IP: ${lbIp}"
+                                break
+                            }
+                            echo "Waiting for LB IP... attempt ${i + 1}/24"
+                            sleep(10)
+                        }
+                        if (!lbIp) error "❌ LB IP not assigned after 4 minutes"
+
+                        def rootUrl = "http://${lbIp}"
+                        echo "🌍 ROOT_URL: ${rootUrl}"
 
                         // 3. RocketChat app
                         sh """
@@ -240,13 +267,13 @@ pipeline {
                                 --set nginx.enabled=false \
                                 --set rocketchat.mongoUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@${mongoHost}:27017/rocketchat?replicaSet=rs0&authSource=admin" \
                                 --set rocketchat.mongoOplogUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@${mongoHost}:27017/local?replicaSet=rs0&authSource=admin" \
-                                --set rocketchat.rootUrl="${env.ROOT_URL}" \
+                                --set rocketchat.rootUrl="${rootUrl}" \
                                 --namespace ${env.K8S_NAMESPACE} \
                                 --create-namespace \
                                 --wait \
                                 --timeout=10m
                         """
-                        echo "✅ RocketChat deployed to ${env.DEPLOY_ENV}"
+                        echo "✅ RocketChat deployed to ${env.DEPLOY_ENV}"  
                     }
                 }
             }
