@@ -23,6 +23,8 @@ sudo apt-get install -y kubectl
 kubectl version --client
 sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin
 gcloud version
+
+# Cluster configration dev 
 gcloud container clusters get-credentials dev --region asia-south2 --project project-d3f73645-327e-4f11-ba2
 kubectl get nodes
 
@@ -39,60 +41,6 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Verify
 helm version
-
-#Step 4: Install Docker
-sudo apt remove --ignore-missing -y \
-  docker.io docker-compose docker-compose-v2 docker-doc \
-  podman-docker containerd runc || true
-
-# Add Docker's official GPG key
-sudo apt update
-sudo apt install -y ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-  -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-# Add the repository to Apt sources
-sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
-Types: deb
-URIs: https://download.docker.com/linux/ubuntu
-Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
-Components: stable
-Architectures: $(dpkg --print-architecture)
-Signed-By: /etc/apt/keyrings/docker.asc
-EOF
-
-sudo apt update
-sudo apt install -y \
-  docker-ce docker-ce-cli containerd.io \
-  docker-buildx-plugin docker-compose-plugin
-
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker jenkins
-sudo chmod 666 /var/run/docker.sock
-
-# Step 5: Install Jenkins
-sudo apt install -y fontconfig openjdk-21-jre
-java -version
-
-sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
-  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
-
-echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
-  https://pkg.jenkins.io/debian-stable binary/ \
-  | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
-
-sudo apt update
-sudo apt install -y jenkins
-
-# Enable & start Jenkins
-sudo systemctl enable jenkins
-sudo systemctl start jenkins
-
-# Print initial admin password
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 # Step 6: Enable Filestore CSI Driver on GKE
 gcloud container clusters update dev \
@@ -137,7 +85,7 @@ kubectl create namespace rocketchat
 kubectl create namespace rocketchat-db
 kubectl create namespace rocketchat-nginx
 
-
+# Cluster configration staging
 
 gcloud container clusters get-credentials staging --region asia-south2 --project project-d3f73645-327e-4f11-ba2
 kubectl get nodes
@@ -155,60 +103,6 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Verify
 helm version
-
-#Step 4: Install Docker
-sudo apt remove --ignore-missing -y \
-  docker.io docker-compose docker-compose-v2 docker-doc \
-  podman-docker containerd runc || true
-
-# Add Docker's official GPG key
-sudo apt update
-sudo apt install -y ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-  -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-# Add the repository to Apt sources
-sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
-Types: deb
-URIs: https://download.docker.com/linux/ubuntu
-Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
-Components: stable
-Architectures: $(dpkg --print-architecture)
-Signed-By: /etc/apt/keyrings/docker.asc
-EOF
-
-sudo apt update
-sudo apt install -y \
-  docker-ce docker-ce-cli containerd.io \
-  docker-buildx-plugin docker-compose-plugin
-
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker jenkins
-sudo chmod 666 /var/run/docker.sock
-
-# Step 5: Install Jenkins
-sudo apt install -y fontconfig openjdk-21-jre
-java -version
-
-sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
-  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
-
-echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
-  https://pkg.jenkins.io/debian-stable binary/ \
-  | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
-
-sudo apt update
-sudo apt install -y jenkins
-
-# Enable & start Jenkins
-sudo systemctl enable jenkins
-sudo systemctl start jenkins
-
-# "Jenkins initial admin password:"
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 # Step 6: Enable Filestore CSI Driver on GKE
 gcloud container clusters update staging \
@@ -269,60 +163,6 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Verify
 helm version
-
-#Step 4: Install Docker
-sudo apt remove --ignore-missing -y \
-  docker.io docker-compose docker-compose-v2 docker-doc \
-  podman-docker containerd runc || true
-
-# Add Docker's official GPG key
-sudo apt update
-sudo apt install -y ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-  -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-# Add the repository to Apt sources
-sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
-Types: deb
-URIs: https://download.docker.com/linux/ubuntu
-Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
-Components: stable
-Architectures: $(dpkg --print-architecture)
-Signed-By: /etc/apt/keyrings/docker.asc
-EOF
-
-sudo apt update
-sudo apt install -y \
-  docker-ce docker-ce-cli containerd.io \
-  docker-buildx-plugin docker-compose-plugin
-
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker jenkins
-sudo chmod 666 /var/run/docker.sock                
-
-# Step 5: Install Jenkins
-sudo apt install -y fontconfig openjdk-21-jre
-java -version
-
-sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
-  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
-
-echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
-  https://pkg.jenkins.io/debian-stable binary/ \
-  | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
-
-sudo apt update
-sudo apt install -y jenkins
-
-# Enable & start Jenkins
-sudo systemctl enable jenkins
-sudo systemctl start jenkins
-
-# "Jenkins initial admin password:"
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 # Step 6: Enable Filestore CSI Driver on GKE
 gcloud container clusters update prod \
