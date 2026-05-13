@@ -23,7 +23,7 @@ sudo apt-get install -y kubectl
 kubectl version --client
 sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin
 gcloud version
-gcloud container clusters get-credentials main --region asia-south2 --project project-d3f73645-327e-4f11-ba2
+gcloud container clusters get-credentials dev --region asia-south2 --project project-d3f73645-327e-4f11-ba2
 kubectl get nodes
 
 #  gcloud config
@@ -95,7 +95,7 @@ sudo systemctl start jenkins
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 # Step 6: Enable Filestore CSI Driver on GKE
-gcloud container clusters update main \
+gcloud container clusters update dev \
   --update-addons=GcpFilestoreCsiDriver=ENABLED \
   --zone=asia-south2
 
@@ -253,7 +253,7 @@ kubectl create namespace rocketchat
 kubectl create namespace rocketchat-db
 kubectl create namespace rocketchat-nginx
 
-gcloud container clusters get-credentials dev --region asia-south2 --project project-d3f73645-327e-4f11-ba2
+gcloud container clusters get-credentials prod --region asia-south2 --project project-d3f73645-327e-4f11-ba2
 kubectl get nodes
 
 #  gcloud config
@@ -325,7 +325,7 @@ sudo systemctl start jenkins
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 # Step 6: Enable Filestore CSI Driver on GKE
-gcloud container clusters update dev \
+gcloud container clusters update prod \
   --update-addons=GcpFilestoreCsiDriver=ENABLED \
   --zone=asia-south2
 
@@ -368,6 +368,9 @@ kubectl create namespace rocketchat-db
 kubectl create namespace rocketchat-nginx
 
 # Step 12: Pre-flight Checks"
+echo "[0] cluster:"
+gcloud container clusters list
+
 echo "[1] Nodes:"
 kubectl get nodes
 
