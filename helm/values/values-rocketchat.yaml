@@ -1,7 +1,6 @@
 rocketchat:
   enabled: true
   replicaCount: 1
-  rootUrl: "http://<public_ip>"
   imagePullSecrets:
     - name: gar-secret
   image:
