@@ -41,7 +41,8 @@ pipeline {
                     if (env.GIT_BRANCH?.contains('prod')) {
                         env.DEPLOY_ENV        = 'prod'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig-prod'
-                        env.ROOT_URL          = 'http://prod.rocketchat.example.com'
+                        env.GKE_ZONE          = 'us-east1'
+                        env.GKE_CLUSTER       = 'prod'
                         env.HELM_RELEASE      = 'rocketchat-prod'
                         env.HELM_RELEASE_DB   = 'rocketchat-db-prod'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx-prod'
@@ -53,7 +54,6 @@ pipeline {
                     } else if (env.GIT_BRANCH?.contains('staging')) {
                         env.DEPLOY_ENV        = 'staging'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig-staging'
-                        env.ROOT_URL          = '34.138.88.107:8081'
                         env.HELM_RELEASE      = 'rocketchat-staging'
                         env.GKE_ZONE          = 'us-east1'
                         env.GKE_CLUSTER       = 'staging'
@@ -67,7 +67,7 @@ pipeline {
                         env.DEPLOY_ENV        = 'dev'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig'
                         env.HELM_RELEASE      = 'rocketchat-app'
-                        env.GKE_CLUSTER       = 'main'
+                        env.GKE_CLUSTER       = 'dev'
                         env.GKE_ZONE          = 'us-east1'
                         env.HELM_RELEASE_DB   = 'rocketchat-db'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx'
