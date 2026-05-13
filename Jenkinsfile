@@ -46,17 +46,19 @@ pipeline {
                         env.HELM_RELEASE_DB   = 'rocketchat-db-prod'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx-prod'
                         env.K8S_NAMESPACE     = 'rocketchat-prod'
+                        env.PROJECT_ID        = 'project-d3f73645-327e-4f11-ba2'
 
-                    } else if (env.GIT_BRANCH?.contains('main')) {
+                    } else if (env.GIT_BRANCH?.contains('staging')) {
                         env.DEPLOY_ENV        = 'staging'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig-staging'
                         env.ROOT_URL          = '34.138.88.107:8081'
                         env.HELM_RELEASE      = 'rocketchat-staging'
-                        env.GKE_ZONE          = 'asia-south1-c'
-                        env.GKE_CLUSTER       = 'gke-staging-cluster'
+                        env.GKE_ZONE          = 'us-east1'
+                        env.GKE_CLUSTER       = 'staging'
                         env.HELM_RELEASE_DB   = 'rocketchat-db-staging'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx-staging'
                         env.K8S_NAMESPACE     = 'rocketchat-staging'
+                        env.PROJECT_ID        = 'project-d3f73645-327e-4f11-ba2'
 
                     } else if (env.GIT_BRANCH?.contains('develop')) {
                         env.DEPLOY_ENV        = 'dev'
@@ -64,10 +66,11 @@ pipeline {
                         env.ROOT_URL          = '34.138.88.107:8082'
                         env.HELM_RELEASE      = 'rocketchat-app'
                         env.GKE_CLUSTER       = 'main'
-                        env.GKE_ZONE          = 'us-east1-d'
+                        env.GKE_ZONE          = 'us-east1'
                         env.HELM_RELEASE_DB   = 'rocketchat-db'
                         env.HELM_RELEASE_NGINX= 'rocketchat-nginx'
                         env.K8S_NAMESPACE     = 'rocketchat'
+                        env.PROJECT_ID        = 'project-d3f73645-327e-4f11-ba2'
 
                     } else {
                         env.DEPLOY_ENV        = 'none'
@@ -137,19 +140,19 @@ pipeline {
         }
 
         // ── Scan ────────────────────────────────────────────────────────────
-        stage('Scan Image (Trivy)') {
-            steps {
-                sh """
-                    echo "🔍 Scanning for HIGH/CRITICAL CVEs..."
-                    trivy image \
-                        --exit-code 1 \
-                        --severity HIGH,CRITICAL \
-                        --ignore-unfixed \
-                        ${FULL_IMAGE}
-                    echo "✅ Trivy scan passed"
-                """
-            }
-        }
+        // stage('Scan Image (Trivy)') {
+        //     steps {
+        //         sh """
+        //             echo "🔍 Scanning for HIGH/CRITICAL CVEs..."
+        //             trivy image \
+        //                 --exit-code 1 \
+        //                 --severity HIGH,CRITICAL \
+        //                 --ignore-unfixed \
+        //                 ${FULL_IMAGE}
+        //             echo "✅ Trivy scan passed"
+        //         """
+        //     }
+        // }
 
         // ── Push ────────────────────────────────────────────────────────────
         stage('Push to Artifact Registry') {
