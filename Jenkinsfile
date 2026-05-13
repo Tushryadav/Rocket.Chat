@@ -63,7 +63,7 @@ pipeline {
                     } else if (env.GIT_BRANCH?.contains('develop')) {
                         env.DEPLOY_ENV        = 'dev'
                         env.KUBECONFIG_ID     = 'k8s-kubeconfig'
-                        env.ROOT_URL          = '34.138.88.107:8082'
+                        env.ROOT_URL          = '34.74.134.35:8082'
                         env.HELM_RELEASE      = 'rocketchat-app'
                         env.GKE_CLUSTER       = 'main'
                         env.GKE_ZONE          = 'us-east1'
