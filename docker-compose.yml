@@ -1,10 +1,20 @@
 version: '3.8'
 
+networks:
+  backend:
+    driver: bridge
+    internal: true          # backend is NOT internet-routable — only inter-container
+  frontend:
+    driver: bridge          # frontend can reach the outside world (nginx needs it)
+
 services:
   mongodb:
     image: mongo:7.0
     container_name: rocketchat_mongo
      command:  ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo-keyfile"]
+     restart: unless-stopped
+     networks:
+      - backend 
     volumes:
       - mongo_data:/data/db
       - /etc/mongo-keyfile:/etc/mongo-keyfile:ro
@@ -14,13 +24,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '1.0'
 
   rocketchat:
-    image: registry.rocket.chat/rocketchat/rocket.chat:latest   # create a image using Dockerfile 
+    image: registry.rocket.chat/rocketchat/rocket.chat:7.4.0   # create a image using Dockerfile 
     container_name: rocketchat_app
     restart: unless-stopped
-    extra_hosts:
-    - "host.docker.internal:host-gateway"
+    networks:
+      - backend             
+      - frontend
     env_file:
       - .env
     ports:
@@ -46,6 +62,8 @@ services:
     image: nginx:alpine
     container_name: rocketchat_nginx
     restart: unless-stopped
+    networks:
+      - frontend
     ports:
       - "8080:8080"       # HTTP
       - "8443:8443"     # HTTPS (for when you add SSL later)
