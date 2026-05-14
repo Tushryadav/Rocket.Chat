@@ -3,19 +3,10 @@ pipeline {
 
     environment {
         REGION          = 'asia-south2'
-        PROJECT_ID      = 'project-d3f73645-327e-4f11-ba2'
         REPOSITORY      = 'rocketchat'
         GAR_HOSTNAME    = "${REGION}-docker.pkg.dev"
-
         IMAGE_NAME      = 'rocketchat-v0.1'
-        FULL_IMAGE      = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
-        LATEST_IMAGE    = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
-
-        SERVICE_ACC     = '440563071013-compute@developer.gserviceaccount.com'
-
         HELM_CHART_PATH = './helm'
-        MONGO_DB        = 'rocketchat'
-        MONGO_PASS      = 'verysecurepassword'
     }
 
     options {
@@ -113,12 +104,17 @@ pipeline {
         }
 
         stage('Connect to GKE') {
+            when { expression { env.DEPLOY_ENV != 'none' } }
             steps {
+                withCredentials([
+                    string(credentialsId: 'gcp-project-id', variable: 'PROJECT_ID')
+                ]) {
                 sh '''
                     gcloud container clusters get-credentials ${GKE_CLUSTER} \
                         --zone ${GKE_ZONE} \
                         --project ${PROJECT_ID}
-                '''
+                   '''
+                }
             }
         }
 
@@ -126,11 +122,17 @@ pipeline {
         stage('Build Image') {
             steps {
                 script {
+                    withCredentials([
+                        string(credentialsId: 'gcp-project-id', variable: 'PROJECT_ID')
+                    ]) {
                     def shortCommit = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'unknown'
+                    env.FULL_IMAGE    = "${GAR_HOSTNAME}/$PROJECT_ID/${REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
+                    env.LATEST_IMAGE  = "${GAR_HOSTNAME}/$PROJECT_ID/${REPOSITORY}/${IMAGE_NAME}:latest"
+                    
                     sh """
                         docker build \
-                            -t ${FULL_IMAGE} \
-                            -t ${LATEST_IMAGE} \
+                            -t ${env.FULL_IMAGE} \
+                            -t ${env.LATEST_IMAGE} \
                             --label build-number=${BUILD_NUMBER} \
                             --label git-commit=${shortCommit} \
                             --label git-branch=${GIT_BRANCH} \
@@ -173,8 +175,9 @@ pipeline {
             when { expression { env.DEPLOY_ENV != 'none' } }
             steps {
                 script {
-                    withCredentials([file(credentialsId: env.KUBECONFIG_ID, variable: 'KUBECONFIG')]) {
-
+                    withCredentials([file(credentialsId: env.KUBECONFIG_ID, variable: 'KUBECONFIG'),
+                        string(credentialsId: 'gcp-service-acc', variable: 'SERVICE_ACC')
+                    ]) {
                         wrap([$class: 'MaskPasswordsBuildWrapper']) {
                             sh """
                                 echo "🔐 Creating GAR image-pull secret..."
@@ -204,8 +207,11 @@ pipeline {
             when { expression { env.DEPLOY_ENV != 'none' } }
             steps {
                 script {
-                    withCredentials([file(credentialsId: env.KUBECONFIG_ID, variable: 'KUBECONFIG')]) {
-
+                    withCredentials([file(credentialsId: env.KUBECONFIG_ID, variable: 'KUBECONFIG'),
+                                     string(credentialsId: 'mongo-db-user',  variable: 'MONGO_USER'),
+                                     string(credentialsId: 'mongo-db-pass',  variable: 'MONGO_PASS')
+                    ]) {
+                        
                         def dbNamespace    = "rocketchat-db-${env.DEPLOY_ENV == 'dev' ? '' : env.DEPLOY_ENV}".replaceAll('-$','')
                         def nginxNamespace = "rocketchat-nginx-${env.DEPLOY_ENV == 'dev' ? '' : env.DEPLOY_ENV}".replaceAll('-$','')
                         def mongoHost      = "${env.HELM_RELEASE_DB}-mongodb-0.${env.HELM_RELEASE_DB}-mongodb.${dbNamespace}.svc.cluster.local"
@@ -265,8 +271,8 @@ pipeline {
                                 -f ${HELM_CHART_PATH}/values/values-rocketchat.yaml \
                                 --set mongodb.enabled=false \
                                 --set nginx.enabled=false \
-                                --set rocketchat.mongoUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@${mongoHost}:27017/rocketchat?replicaSet=rs0&authSource=admin" \
-                                --set rocketchat.mongoOplogUrl="mongodb://${MONGO_DB}:${MONGO_PASS}@${mongoHost}:27017/local?replicaSet=rs0&authSource=admin" \
+                                --set rocketchat.mongoUrl="mongodb://\$MONGO_USER:\$MONGO_PASS@${mongoHost}:27017/rocketchat?replicaSet=rs0&authSource=admin" \
+                                --set rocketchat.mongoOplogUrl="mongodb://\$MONGO_USER:\$MONGO_PASS@${mongoHost}:27017/local?replicaSet=rs0&authSource=admin" \
                                 --set rocketchat.rootUrl="${rootUrl}" \
                                 --namespace ${env.K8S_NAMESPACE} \
                                 --create-namespace \
