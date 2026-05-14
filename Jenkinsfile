@@ -125,23 +125,23 @@ pipeline {
                     withCredentials([
                         string(credentialsId: 'gcp-project-id', variable: 'PROJECT_ID')
                     ]) {
-                    def shortCommit = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'unknown'
-                    env.FULL_IMAGE    = "${GAR_HOSTNAME}/$PROJECT_ID/${REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
-                    env.LATEST_IMAGE  = "${GAR_HOSTNAME}/$PROJECT_ID/${REPOSITORY}/${IMAGE_NAME}:latest"
-                    
-                    sh """
-                        docker build \
-                            -t ${env.FULL_IMAGE} \
-                            -t ${env.LATEST_IMAGE} \
-                            --label build-number=${BUILD_NUMBER} \
-                            --label git-commit=${shortCommit} \
-                            --label git-branch=${GIT_BRANCH} \
-                            --label build-date=\$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-                            .
-                    """
-                    echo "✅ Image built: ${FULL_IMAGE}"
-                }
-            }
+                        def shortCommit = env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'unknown'
+                        env.FULL_IMAGE   = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:${BUILD_NUMBER}"
+                        env.LATEST_IMAGE = "${GAR_HOSTNAME}/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
+                        sh """
+                            docker build \
+                                -t ${env.FULL_IMAGE} \
+                                -t ${env.LATEST_IMAGE} \
+                                --label build-number=${BUILD_NUMBER} \
+                                --label git-commit=${shortCommit} \
+                                --label git-branch=${GIT_BRANCH} \
+                                --label build-date=\$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+                                .
+                        """
+                        echo "✅ Image built: ${env.FULL_IMAGE}"
+                    }           // closes withCredentials
+                }               // closes script
+            }                   // closes steps
         }
 
         // ── Scan ────────────────────────────────────────────────────────────
